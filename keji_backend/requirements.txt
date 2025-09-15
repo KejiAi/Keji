@@ -8,3 +8,5 @@ werkzeug
 flask-dance
 authlib
 flask-cors
+transformers
+torch

@@ -3,8 +3,12 @@ from flask_login import login_required, current_user
 from app import db
 from models import Conversation, Message
 import random
+import os
+from werkzeug.utils import secure_filename
 
 chat_bp = Blueprint("chat", __name__)
+UPLOAD_FOLDER = "uploads"
+os.makedirs(UPLOAD_FOLDER, exist_ok=True) 
 
 def call_llm(messages):
     responses = [
@@ -35,15 +39,29 @@ def call_llm(messages):
     
     return random.choice(responses)
 
+# def handle_uploaded_files(files):
+#     """
+#     Save uploaded files to UPLOAD_FOLDER and return a list of saved filenames.
+#     """
+#     saved_files = []
+#     for f in files:
+#         if f.filename:  # skip empty uploads
+#             filename = secure_filename(f.filename)
+#             filepath = os.path.join(UPLOAD_FOLDER, filename)
+#             f.save(filepath)
+#             print(f"✅ Received file: {filename} -> saved at {filepath}")
+#             saved_files.append(filepath)
+#     return saved_files
+
 
 @chat_bp.route("/chat", methods=["POST"])
 @login_required
 def chat():
     user_message = request.form.get("message")  # text
     files = request.files.getlist("files")
+    # saved_files = handle_uploaded_files(files)
+    print(user_message)
 
-    # TODO: handle files (save, parse, etc.)
-    # For now just log them
     for f in files:
         print(f.filename)
     """I will come back to file handling later"""
@@ -68,7 +86,6 @@ def chat():
 
     # 4. Call LLM
     bot_reply = call_llm(messages)
-    print(bot_reply)
 
     # 5. Save bot reply
     bot_msg = Message(conversation_id=conversation.id, sender="bot", text=bot_reply)

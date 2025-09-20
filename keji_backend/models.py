@@ -8,6 +8,10 @@ class User(UserMixin, db.Model):
     name = db.Column(db.String(150), nullable=False)
     email = db.Column(db.String(150), unique=True, nullable=False)
     password_hash = db.Column(db.String(256), nullable=False)
+    is_verified = db.Column(db.Boolean, default=False)
+    verification_code = db.Column(db.String(6), nullable=True)
+    verification_token = db.Column(db.String(255), nullable=True)
+    created_at = db.Column(db.DateTime, default=datetime.now())
 
     def set_password(self, password):
         self.password_hash = generate_password_hash(password)

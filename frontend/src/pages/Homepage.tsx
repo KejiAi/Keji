@@ -316,10 +316,27 @@ const Homepage = () => {
                   onChange={(e) => setMessage(e.target.value)}
                   placeholder="E.g: I have ₦600, what can I eat"
                   className="flex-1 bg-transparent border-0 ring-0 outline-none focus:border-0 focus:ring-0 text-base placeholder:text-muted-foreground placeholder:text-xs px-2 py-3 resize-none min-h-[48px]"
-                  onKeyPress={(e) => {
-                    if (e.key === 'Enter' && !e.shiftKey) {
-                      e.preventDefault();
-                      handleSendMessage();
+                  onKeyDown={(e) => {
+                    // On mobile, Enter creates new line, Ctrl+Enter or Cmd+Enter sends message
+                    // On desktop, Enter sends message, Shift+Enter creates new line
+                    const isMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
+                    
+                    if (e.key === "Enter") {
+                      if (isMobile) {
+                        // On mobile: Enter = new line, Ctrl+Enter = send
+                        if (e.ctrlKey || e.metaKey) {
+                          e.preventDefault();
+                          handleSendMessage();
+                        }
+                        // Otherwise, let Enter create a new line naturally
+                      } else {
+                        // On desktop: Enter = send (unless Shift is held)
+                        if (!e.shiftKey) {
+                          e.preventDefault();
+                          handleSendMessage();
+                        }
+                        // Shift+Enter creates new line naturally
+                      }
                     }
                   }}
                   rows={1}
@@ -362,7 +379,7 @@ const Homepage = () => {
               multiple
               className="hidden"
               onChange={handleFileChange}
-              accept="image/*,.pdf,.doc,.docx,.txt"
+              accept=".jpg,.jpeg,.png,.pdf,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.txt"
             />
           </div>
         </div>

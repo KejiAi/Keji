@@ -7,6 +7,7 @@ import { SessionProvider } from "@/contexts/SessionContext";
 import ProtectedRoute from "./components/ProtectedRoute";
 import Index from "./pages/Index";
 import Start from "./pages/Start";
+import EmailVerification from "./pages/EmailVerification";
 import Homepage from "./pages/Homepage";
 import Chat from "./pages/Chat";
 import Profile from "./pages/Profile";
@@ -24,6 +25,7 @@ const App = () => (
           <Routes>
             <Route path="/" element={<Index />} />
             <Route path="/start" element={<Start />} />
+            <Route path="/verify-email" element={<EmailVerification />} />
             <Route path="/homepage" element={<ProtectedRoute><Homepage /></ProtectedRoute>} />
             <Route path="/chat" element={<ProtectedRoute><Chat /></ProtectedRoute>} />
             <Route path="/profile" element={<ProtectedRoute><Profile /></ProtectedRoute>} />

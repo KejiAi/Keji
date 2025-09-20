@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef, useCallback } from "react";
 import { useNavigate, useLocation } from "react-router-dom";
 import PageContainer from "@/components/layout/PageContainer";
 import SEO from "@/components/common/SEO";
@@ -6,6 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { getBackendUrl } from "@/lib/utils";
+import { useSession } from "@/contexts/SessionContext";
 
 const frontendUrl = import.meta.env.VITE_FRONTEND_BASE_URL;
 
@@ -19,6 +20,7 @@ interface Message {
 const Chat = () => {
   const navigate = useNavigate();
   const location = useLocation();
+  const { user, isLoading: sessionLoading } = useSession();
   const [messages, setMessages] = useState<Message[]>([]);
   const [inputMessage, setInputMessage] = useState("");
   const [loading, setLoading] = useState(false);
@@ -33,6 +35,9 @@ const Chat = () => {
   // ✅ Fetch chat history when component mounts
   useEffect(() => {
     const fetchHistory = async () => {
+      // Only fetch history if user is authenticated
+      if (!user) return;
+      
       try {
         const response = await fetch(`${getBackendUrl()}/chat/history`, {
           method: "GET",
@@ -42,7 +47,7 @@ const Chat = () => {
         if (response.ok) {
           const data = await response.json();
           const historyMessages: Message[] = data.messages.map(
-            (m: any, index: number) => ({
+            (m: { text: string; sender: string; timestamp: string }, index: number) => ({
               id: `history-${index}`,
               text: m.text,
               sender: m.sender,
@@ -57,17 +62,8 @@ const Chat = () => {
     };
 
     fetchHistory();
-  }, []);
+  }, [user]);
 
-  useEffect(() => {
-    const initialMessage = location.state?.message;
-    const initialFiles = location.state?.files;
-    
-    if (initialMessage && !hasProcessedInitialMessage.current) {
-      hasProcessedInitialMessage.current = true;
-      sendMessage(initialMessage, initialFiles);
-    }
-  }, [location.state]);
 
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
@@ -122,8 +118,14 @@ const Chat = () => {
     adjustHeight();
   }, [inputMessage]);
 
-  const sendMessage = async (messageText: string, files?: File[]) => {
+  const sendMessage = useCallback(async (messageText: string, files?: File[]) => {
     if (!messageText.trim() && !files?.length) return;
+    
+    // Ensure user is authenticated before sending message
+    if (!user) {
+      console.error("User not authenticated");
+      return;
+    }
 
     const userMessage: Message = {
       id: Date.now().toString(),
@@ -140,7 +142,9 @@ const Chat = () => {
       const formData = new FormData();
       formData.append("message", messageText);
 
-      if (files) {
+      // Handle files properly - check if files exist and are File objects
+      if (files && files.length > 0) {
+        console.log("Sending files to backend:", files.length, "files");
         for (let i = 0; i < files.length; i++) {
           formData.append("files", files[i]);
         }
@@ -176,7 +180,20 @@ const Chat = () => {
     } finally {
       setLoading(false);
     }
-  };
+  }, [user]);
+
+  useEffect(() => {
+    const initialMessage = location.state?.message;
+    const initialFiles = location.state?.files;
+    
+    // Process if there's a message OR files (or both)
+    if ((initialMessage || (initialFiles && initialFiles.length > 0)) && !hasProcessedInitialMessage.current) {
+      hasProcessedInitialMessage.current = true;
+      // Ensure files are properly passed as array
+      const filesToSend = initialFiles && Array.isArray(initialFiles) ? initialFiles : [];
+      sendMessage(initialMessage || "", filesToSend.length > 0 ? filesToSend : undefined);
+    }
+  }, [location.state, sendMessage]);
 
   const handleSendMessage = () => {
     sendMessage(inputMessage, selectedFiles.length > 0 ? selectedFiles : undefined);
@@ -202,6 +219,17 @@ const Chat = () => {
   const removeFile = (index: number) => {
     setSelectedFiles(prev => prev.filter((_, i) => i !== index));
   };
+
+  // Show loading while session is being validated
+  if (sessionLoading) {
+    return (
+      <PageContainer variant="static">
+        <div className="flex items-center justify-center min-h-screen">
+          <div className="text-muted-foreground">Loading...</div>
+        </div>
+      </PageContainer>
+    );
+  }
 
   return (
     <PageContainer variant="static">
@@ -398,10 +426,27 @@ const Chat = () => {
                   onChange={(e) => setInputMessage(e.target.value)}
                   placeholder="What can I eat this morning?"
                   className="flex-1 bg-transparent border-0 ring-0 outline-none focus:border-0 focus:ring-0 text-base placeholder:text-muted-foreground placeholder:text-md px-2 py-3 resize-none min-h-[48px]"
-                  onKeyPress={(e) => {
-                    if (e.key === "Enter" && !e.shiftKey) {
-                      e.preventDefault();
-                      handleSendMessage();
+                  onKeyDown={(e) => {
+                    // On mobile, Enter creates new line, Ctrl+Enter or Cmd+Enter sends message
+                    // On desktop, Enter sends message, Shift+Enter creates new line
+                    const isMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
+                    
+                    if (e.key === "Enter") {
+                      if (isMobile) {
+                        // On mobile: Enter = new line, Ctrl+Enter = send
+                        if (e.ctrlKey || e.metaKey) {
+                          e.preventDefault();
+                          handleSendMessage();
+                        }
+                        // Otherwise, let Enter create a new line naturally
+                      } else {
+                        // On desktop: Enter = send (unless Shift is held)
+                        if (!e.shiftKey) {
+                          e.preventDefault();
+                          handleSendMessage();
+                        }
+                        // Shift+Enter creates new line naturally
+                      }
                     }
                   }}
                   rows={1}

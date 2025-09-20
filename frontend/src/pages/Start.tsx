@@ -9,6 +9,8 @@ import { useSearchParams } from "react-router-dom";
 import Logo from "@/components/branding/Logo";
 import { getBackendUrl } from "@/lib/utils";
 import { useSession } from "@/contexts/SessionContext";
+import { Eye, EyeOff, Mail } from "lucide-react";
+import { useToast } from "@/hooks/use-toast";
 
 const frontendUrl = import.meta.env.VITE_FRONTEND_BASE_URL;
 
@@ -17,7 +19,10 @@ const Start = () => {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
   const [isLogin, setIsLogin] = useState(searchParams.get("mode") === "login"); // false = signup, true = login
+  const [showPassword, setShowPassword] = useState(false);
+  const [forgotPasswordSuccess, setForgotPasswordSuccess] = useState(false);
   const { login } = useSession();
+  const { toast } = useToast();
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -52,8 +57,11 @@ const Start = () => {
             const userData = await sessionResponse.json();
             login(userData);
           }
+          navigate("/homepage");
+        } else {
+          // For signup, redirect to email verification
+          navigate(`/verify-email?email=${encodeURIComponent(data.email)}`);
         }
-        navigate("/homepage");
       } else {
         const error = await res.json();
         console.error("Authentication error:", error.error);
@@ -64,6 +72,57 @@ const Start = () => {
       navigate("/error", { state: { message: "Something went wrong. Try again later." } });
     }
   };
+
+  const handleForgotPassword = async () => {
+    const emailInput = document.getElementById("email") as HTMLInputElement;
+    const email = emailInput?.value || "";
+
+    if (!email) {
+      toast({
+        title: "⚠️ Email Required",
+        description: "Please enter your email address first.",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    try {
+      const res = await fetch(`${getBackendUrl()}/forgot-password`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email }),
+        credentials: "include",
+      });
+
+      if (res.ok) {
+        const data = await res.json();
+        setForgotPasswordSuccess(true);
+
+        toast({
+          title: "📧 A new password has been sent to your Email!",
+          description: "We’ve sent you a new password. Check your Gmail inbox and log in with it. 🔑 You can later update it in your profile settings.",
+        });
+
+        // Optionally clear the input after success
+        emailInput.value = "";
+      } else {
+        const error = await res.json();
+        toast({
+          title: "❌ Reset Failed",
+          description: error.error || "Could not send reset email. Please try again.",
+          variant: "destructive",
+        });
+      }
+    } catch (err) {
+      console.error("Forgot password error:", err);
+      toast({
+        title: "🚨 Server Error",
+        description: "Something went wrong. Please try again later.",
+        variant: "destructive",
+      });
+    }
+  };
+
 
   return (
     <PageContainer Logo={<Logo />}>
@@ -134,14 +193,35 @@ const Start = () => {
 
               <div className="space-y-2">
                 <Label htmlFor="password" className="font-geist text-lg">Password</Label>
-                <Input
-                  id="password"
-                  name="password"
-                  type="password"
-                  placeholder="e.g john1234@Secure"
-                  className="h-16 rounded-2xl text-lg md:text-lg"
-                  required
-                />
+                <div className="relative">
+                  <Input
+                    id="password"
+                    name="password"
+                    type={showPassword ? "text" : "password"}
+                    placeholder="e.g john1234@Secure"
+                    className="h-16 rounded-2xl text-lg md:text-lg pr-12"
+                    required
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setShowPassword(!showPassword)}
+                    className="absolute right-4 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground transition-colors"
+                    aria-label={showPassword ? "Hide password" : "Show password"}
+                  >
+                    {showPassword ? <EyeOff size={20} /> : <Eye size={20} />}
+                  </button>
+                </div>
+                {isLogin && (
+                  <div className="flex justify-end mt-2">
+                    <button
+                      type="button"
+                      onClick={handleForgotPassword}
+                      className="text-sm text-brand hover:underline font-medium transition-colors"
+                    >
+                      Forgot Password? 🔒
+                    </button>
+                  </div>
+                )}
               </div>
 
               <div className="pt-2 flex justify-center">
@@ -157,10 +237,29 @@ const Start = () => {
               </div>
             </form>
 
+            {forgotPasswordSuccess && isLogin && (
+              <div className="bg-emerald-50 dark:bg-emerald-900/20 border border-emerald-200 dark:border-emerald-800 rounded-2xl p-6 space-y-3">
+                <div className="flex items-center gap-2 text-emerald-700 dark:text-emerald-300">
+                  <Mail className="h-5 w-5" />
+                  <h3 className="font-semibold">Check Your Email! 📧</h3>
+                </div>
+                <div className="text-emerald-600 dark:text-emerald-400 space-y-2">
+                  <p>We've emailed you a new password to your Gmail inbox. You can keep using it ✅ or change it later in your profile settings.</p>
+                  <p className="text-sm">
+                    You can change this password later from 
+                    <span className="font-semibold"> Profile → Change Password</span> settings.
+                  </p>
+                </div>
+              </div>
+            )}
+
             <p className="text-center font-funnelSans text-lg md:text-lg text-muted-foreground">
               {isLogin ? "Don't have an account?" : "Already have an account?"}{" "}
               <span
-                onClick={() => setIsLogin(!isLogin)}
+                onClick={() => {
+                  setIsLogin(!isLogin);
+                  setForgotPasswordSuccess(false); // Reset success message when switching
+                }}
                 className="cursor-pointer font-bold text-brand hover:underline"
               >
                 {isLogin ? "Sign up" : "Log in"}

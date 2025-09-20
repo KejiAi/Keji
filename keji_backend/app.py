@@ -3,6 +3,7 @@ from flask_sqlalchemy import SQLAlchemy
 from flask_migrate import Migrate
 from flask_login import LoginManager, login_required, current_user
 from flask_cors import CORS
+from flask_mail import Mail, Message
 from dotenv import load_dotenv
 import os
 import logging
@@ -10,7 +11,10 @@ import logging
 # Load env
 load_dotenv()
 
+mail = Mail()
+
 app = Flask(__name__)
+
 
 # Set default values if env vars are not found
 SECRET_KEY = os.getenv("SECRET_KEY")
@@ -39,6 +43,19 @@ app.config["REMEMBER_COOKIE_SECURE"] = False
 app.config["REMEMBER_COOKIE_HTTPONLY"] = True
 app.config["REMEMBER_COOKIE_DOMAIN"] = None
 app.config["REMEMBER_COOKIE_PATH"] = "/"
+
+# Mail handler
+app.config['MAIL_SERVER'] = os.environ.get('MAIL_SERVER')
+app.config['MAIL_PORT'] = int(os.environ.get('MAIL_PORT'))
+app.config['MAIL_USE_TLS'] = os.environ.get('MAIL_USE_TLS') == 'True'
+app.config['MAIL_USE_SSL'] = os.environ.get('MAIL_USE_SSL') == 'True'
+app.config['MAIL_USERNAME'] = os.environ.get('MAIL_USERNAME')
+app.config['MAIL_PASSWORD'] = os.environ.get('MAIL_PASSWORD')
+app.config['MAIL_DEFAULT_SENDER'] = os.environ.get('MAIL_DEFAULT_SENDER')
+
+app.config.from_prefixed_env("KejiMail")  # loads MAIL_* from env
+    
+mail.init_app(app)
 
 # Configure logging
 logging.basicConfig(

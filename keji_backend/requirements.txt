@@ -2,11 +2,11 @@ flask
 flask-sqlalchemy
 flask-migrate
 flask-login
+flask-cors
+Flask-Mail
+flask-dance #for GitHub, google OAuth
 python-dotenv
 psycopg2-binary
 werkzeug
-flask-dance
-authlib
-flask-cors
-transformers
-torch
+apscheduler
+# authlib

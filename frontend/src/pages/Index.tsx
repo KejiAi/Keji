@@ -46,6 +46,43 @@ const Index = () => {
         title="Keji AI — Your Correct Food Padi"
         description="Start for free. Keji helps you eat better whether you're broke or busy."
       />
+      {/* Floating Decorative Images */}
+      <div className="absolute inset-0 pointer-events-none">
+        {/* 1. left Top */}
+        <img
+          src="assets/All Icon Used/emojione-monotone_hot-dog.png"
+          alt=""
+          className="absolute top-[192px] left-[52px] h-4 w-auto"
+        />
+
+        {/* 2. right Top */}
+        <img
+          src="assets/All Icon Used/uil_food.png"
+          alt=""
+          className="absolute top-[250px] right-8 h-7 w-auto"
+        />
+
+        {/* 3. left Center */}
+        <img
+          src="assets/All Icon Used/flowbite_bowl-food-outline.png"
+          alt=""
+          className="absolute top-[510px] left-5 h-10 w-auto"
+        />
+
+        {/* 4. right Center */}
+        <img
+          src="assets/All Icon Used/famicons_fast-food-outline.png"
+          alt=""
+          className="absolute top-[565px] right-6 h-6 w-auto"
+        />
+
+        {/* 5. left Bottom */}
+        <img
+          src="assets/All Icon Used/mdi_food-ramen.png"
+          alt=""
+          className="absolute top-[788px] left-16 h-8 w-auto"
+        />
+      </div>
       
       {/* Simple Redirect Message */}
       <AnimatePresence>

@@ -28,6 +28,17 @@ CORS(app,
      allow_headers=["Content-Type", "Authorization"],
      methods=["GET", "POST", "PUT", "DELETE", "OPTIONS"])
 
+# Debug mail config safely
+def debug_mail_config(app):
+    print("📧 Flask-Mail Configuration:")
+    print("MAIL_SERVER:", app.config.get('MAIL_SERVER'))
+    print("MAIL_PORT:", app.config.get('MAIL_PORT'))
+    print("MAIL_USE_TLS:", app.config.get('MAIL_USE_TLS'))
+    print("MAIL_USE_SSL:", app.config.get('MAIL_USE_SSL'))
+    print("MAIL_DEFAULT_SENDER:", app.config.get('MAIL_DEFAULT_SENDER'))
+    # Don’t print MAIL_USERNAME or MAIL_PASSWORD in logs for security reasons
+
+
 app.config["SECRET_KEY"] = SECRET_KEY
 app.config["SQLALCHEMY_DATABASE_URI"] = SQLALCHEMY_DATABASE_URI
 app.config["SESSION_COOKIE_SAMESITE"] = "Lax"  # Changed from "None" to "Lax"
@@ -53,8 +64,6 @@ app.config['MAIL_USERNAME'] = os.environ.get('MAIL_USERNAME')
 app.config['MAIL_PASSWORD'] = os.environ.get('MAIL_PASSWORD')
 app.config['MAIL_DEFAULT_SENDER'] = os.environ.get('MAIL_DEFAULT_SENDER')
 
-app.config.from_prefixed_env("KejiMail")  # loads MAIL_* from env
-    
 mail.init_app(app)
 
 # Configure logging

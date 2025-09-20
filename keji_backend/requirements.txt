@@ -9,4 +9,5 @@ python-dotenv
 psycopg2-binary
 werkzeug
 apscheduler
+gunicorn
 # authlib

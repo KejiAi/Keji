@@ -28,29 +28,25 @@ CORS(app,
      allow_headers=["Content-Type", "Authorization"],
      methods=["GET", "POST", "PUT", "DELETE", "OPTIONS"])
 
-# Debug mail config safely
-def debug_mail_config(app):
-    print("📧 Flask-Mail Configuration:")
-    print("MAIL_SERVER:", app.config.get('MAIL_SERVER'))
-    print("MAIL_PORT:", app.config.get('MAIL_PORT'))
-    print("MAIL_USE_TLS:", app.config.get('MAIL_USE_TLS'))
-    print("MAIL_USE_SSL:", app.config.get('MAIL_USE_SSL'))
-    print("MAIL_DEFAULT_SENDER:", app.config.get('MAIL_DEFAULT_SENDER'))
-    # Don’t print MAIL_USERNAME or MAIL_PASSWORD in logs for security reasons
-
 
 app.config["SECRET_KEY"] = SECRET_KEY
 app.config["SQLALCHEMY_DATABASE_URI"] = SQLALCHEMY_DATABASE_URI
-app.config["SESSION_COOKIE_SAMESITE"] = "Lax"  # Changed from "None" to "Lax"
-app.config["SESSION_COOKIE_SECURE"] = False  # True if HTTPS
+
+ENV = os.getenv("FLASK_ENV", "development")
+
+if ENV == "production":
+    app.config["SESSION_COOKIE_SAMESITE"] = "None"
+    app.config["SESSION_COOKIE_SECURE"] = True
+else:  # development (localhost)
+    app.config["SESSION_COOKIE_SAMESITE"] = "Lax"
+    app.config["SESSION_COOKIE_SECURE"] = False
+
 app.config["SESSION_COOKIE_HTTPONLY"] = True
 app.config["SESSION_COOKIE_DOMAIN"] = None  # Allow cross-origin cookies
 app.config["SESSION_COOKIE_PATH"] = "/"  # Ensure cookie is set for all paths
 app.config["PERMANENT_SESSION_LIFETIME"] = 365 * 24 * 60 * 60  # 1 year (indefinite)
 
 # Remember cookie settings to match session cookies
-app.config["REMEMBER_COOKIE_SAMESITE"] = "Lax"
-app.config["REMEMBER_COOKIE_SECURE"] = False
 app.config["REMEMBER_COOKIE_HTTPONLY"] = True
 app.config["REMEMBER_COOKIE_DOMAIN"] = None
 app.config["REMEMBER_COOKIE_PATH"] = "/"

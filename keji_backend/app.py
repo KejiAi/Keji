@@ -1,4 +1,4 @@
-from flask import Flask, jsonify
+from flask import Flask, jsonify, request
 from flask_sqlalchemy import SQLAlchemy
 from flask_migrate import Migrate
 from flask_login import LoginManager, login_required, current_user
@@ -28,6 +28,17 @@ CORS(app,
      allow_headers=["Content-Type", "Authorization"],
      methods=["GET", "POST", "PUT", "DELETE", "OPTIONS"])
 
+# Debug mail config safely
+def debug_mail_config(app):
+    print("📧 Flask-Mail Configuration:")
+    print("MAIL_SERVER:", app.config.get('MAIL_SERVER'))
+    print("MAIL_PORT:", app.config.get('MAIL_PORT'))
+    print("MAIL_USE_TLS:", app.config.get('MAIL_USE_TLS'))
+    print("MAIL_USE_SSL:", app.config.get('MAIL_USE_SSL'))
+    print("MAIL_DEFAULT_SENDER:", app.config.get('MAIL_DEFAULT_SENDER'))
+    # Don’t print MAIL_USERNAME or MAIL_PASSWORD in logs for security reasons
+
+
 app.config["SECRET_KEY"] = SECRET_KEY
 app.config["SQLALCHEMY_DATABASE_URI"] = SQLALCHEMY_DATABASE_URI
 app.config["SESSION_COOKIE_SAMESITE"] = "Lax"  # Changed from "None" to "Lax"
@@ -56,10 +67,9 @@ app.config['MAIL_DEFAULT_SENDER'] = os.environ.get('MAIL_DEFAULT_SENDER')
 mail.init_app(app)
 
 # Configure logging
-logging.basicConfig(
-    level=logging.INFO,
-    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
-)
+from logging_config import setup_logging
+logger = setup_logging(app)
+logger.info("Flask application starting up...")
 
 db = SQLAlchemy(app)
 migrate = Migrate(app, db)
@@ -77,7 +87,35 @@ app.register_blueprint(chat_bp)
 
 @login_manager.user_loader
 def load_user(user_id):
-    return User.query.get(int(user_id))
+    logger.debug(f"Loading user with ID: {user_id}")
+    user = User.query.get(int(user_id))
+    if user:
+        logger.debug(f"User loaded successfully: {user.name} ({user.email})")
+    else:
+        logger.warning(f"User not found with ID: {user_id}")
+    return user
+
+# Request/Response logging middleware
+@app.before_request
+def log_request_info():
+    logger.info(f"Request: {request.method} {request.url}")
+    logger.debug(f"Request headers: {dict(request.headers)}")
+    if request.is_json:
+        logger.debug(f"Request JSON data: {request.get_json()}")
+    elif request.form:
+        logger.debug(f"Request form data: {dict(request.form)}")
+
+@app.after_request
+def log_response_info(response):
+    logger.info(f"Response: {response.status_code} for {request.method} {request.url}")
+    logger.debug(f"Response headers: {dict(response.headers)}")
+    return response
+
+# Error logging
+@app.errorhandler(Exception)
+def handle_exception(e):
+    logger.error(f"Unhandled exception: {str(e)}", exc_info=True)
+    return jsonify({"error": "Internal server error"}), 500
 
 
 # if __name__ == "__main__":

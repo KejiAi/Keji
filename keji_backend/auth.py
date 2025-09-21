@@ -23,17 +23,22 @@ serializer = URLSafeTimedSerializer(os.getenv('SECRET_KEY'))
 # ✅ SIGN-UP (with verification code + link)
 @auth_bp.route("/sign-up", methods=["POST"])
 def signup():
+    logger.info("Sign-up request received")
     data = request.get_json()
     name = data.get("name")
     email = data.get("email")
     password = data.get("password")
 
+    logger.debug(f"Sign-up attempt for email: {email}, name: {name}")
+
     if User.query.filter_by(email=email).first():
+        logger.warning(f"Sign-up failed: Email already registered - {email}")
         return jsonify({"error": "Email already registered"}), 400
 
     # Generate code & token
     code = str(random.randint(100000, 999999))
     token = serializer.dumps(email, salt="email-verify")
+    logger.debug(f"Generated verification code and token for {email}")
 
     user = User(
         name=name,
@@ -45,6 +50,7 @@ def signup():
     user.set_password(password)
     db.session.add(user)
     db.session.commit()
+    logger.info(f"User created successfully: {email} (ID: {user.id})")
 
     # Build link
     verify_link = f"{os.getenv('BACKEND_URL_LOCAL')}/verify-email/{token}"
@@ -68,8 +74,12 @@ This link/code will expire in 1 hour.
 Cheers,
 Your App Team
 """
-    mail.send(msg)
-
+    try:
+        mail.send(msg)
+        logger.info(f"Verification email sent successfully to {email}")
+    except Exception as e:
+        logger.error(f"Failed to send verification email to {email}: {str(e)}")
+        return jsonify({"error": "Failed to send verification email"}), 500
 
     return jsonify({"message": "User created. Verification email sent."}), 201
 
@@ -77,18 +87,23 @@ Your App Team
 # ✅ VERIFY BY LINK
 @auth_bp.route("/verify-email/<token>", methods=["GET"])
 def verify_link(token):
+    logger.info(f"Email verification link accessed with token: {token[:10]}...")
     try:
         email = serializer.loads(token, salt="email-verify", max_age=3600)
-    except (SignatureExpired, BadSignature):
+        logger.debug(f"Token decoded successfully for email: {email}")
+    except (SignatureExpired, BadSignature) as e:
+        logger.warning(f"Invalid or expired token: {str(e)}")
         return jsonify({"error": "Invalid or expired token"}), 400
 
     user = User.query.filter_by(email=email).first()
     if not user:
+        logger.error(f"User not found for email: {email}")
         return jsonify({"error": "User not found"}), 404
 
     user.is_verified = True
     user.verification_code = None
     db.session.commit()
+    logger.info(f"Email verified successfully for user: {email} (ID: {user.id})")
 
     return redirect(f"{os.getenv("FRONTEND_BASE_URL")}/start?mode=login")  # adjust for your frontend
 
@@ -96,20 +111,26 @@ def verify_link(token):
 # ✅ VERIFY BY CODE
 @auth_bp.route("/verify-email/code", methods=["POST"])
 def verify_code():
+    logger.info("Email verification code request received")
     data = request.get_json()
     email = data.get("email")
     code = data.get("code")
 
+    logger.debug(f"Verification attempt for email: {email} with code: {code}")
+
     user = User.query.filter_by(email=email).first()
     if not user:
+        logger.warning(f"Verification failed: User not found for email: {email}")
         return jsonify({"error": "User not found"}), 404
 
     if user.verification_code == code:
         user.is_verified = True
         user.verification_code = None
         db.session.commit()
+        logger.info(f"Email verified successfully via code for user: {email} (ID: {user.id})")
         return jsonify({"message": "Email verified"}), 200
 
+    logger.warning(f"Invalid verification code for email: {email}")
     return jsonify({"error": "Invalid code"}), 400
 
 
@@ -140,19 +161,25 @@ def resend_code():
 # ✅ LOGIN (block unverified users)
 @auth_bp.route("/login", methods=["POST"])
 def login():
+    logger.info("Login request received")
     data = request.get_json()
     email = data.get("email")
     password = data.get("password")
 
+    logger.debug(f"Login attempt for email: {email}")
+
     user = User.query.filter_by(email=email).first()
     if not user or not user.check_password(password):
+        logger.warning(f"Login failed: Invalid credentials for email: {email}")
         return jsonify({"error": "Invalid email or password"}), 401
 
     if not user.is_verified:
+        logger.warning(f"Login failed: Email not verified for user: {email}")
         return jsonify({"error": "Email not verified"}), 403
 
     login_user(user, remember=True)
     session.permanent = True
+    logger.info(f"Login successful for user: {user.name} ({email}) - ID: {user.id}")
     return jsonify({"message": "Login successful"}), 200
 
 # Handle forgot password
@@ -163,44 +190,56 @@ def generate_temp_password(length=10):
 
 @auth_bp.route("/forgot-password", methods=["POST"])
 def forgot_password():
+    logger.info("Forgot password request received")
     data = request.get_json()
     email = data.get("email")
 
     if not email:
+        logger.warning("Forgot password failed: No email provided")
         return jsonify({"error": "Email is required"}), 400
+
+    logger.debug(f"Password reset request for email: {email}")
 
     user = User.query.filter_by(email=email).first()
     if not user:
+        logger.warning(f"Password reset failed: User not found for email: {email}")
         return jsonify({"error": "User not found"}), 404
 
     # ✅ Generate a clean random password
     temp_password = generate_temp_password()
+    logger.debug(f"Generated temporary password for user: {email}")
 
     # ✅ Hash and save in DB
     user.set_password(temp_password)
     db.session.commit()
+    logger.info(f"Password reset successfully for user: {email} (ID: {user.id})")
 
     # ✅ Friendly Email
     msg = Message(
-        subject="🔑 Reset Your Password – We’ve Got You Covered!",
+        subject="🔑 Reset Your Password – We've Got You Covered!",
         recipients=[email]
     )
     msg.body = f"""
 Hey {user.name} 👋,
 
 No stress – password resets happen to the best of us! 💪  
-Here’s your brand new password:  
+Here's your brand new password:  
 
 👉  {temp_password}  
 
-You can continue using this password if you’d like ✅,  
+You can continue using this password if you'd like ✅,  
 or update it anytime from your profile under **Change Password** for extra security 🔒.  
 
 Stay awesome,  
 ✨ Your App Team ✨
 """
 
-    mail.send(msg)
+    try:
+        mail.send(msg)
+        logger.info(f"Password reset email sent successfully to {email}")
+    except Exception as e:
+        logger.error(f"Failed to send password reset email to {email}: {str(e)}")
+        return jsonify({"error": "Failed to send password reset email"}), 500
 
     return jsonify({"message": "Password reset email sent successfully"}), 200
 
@@ -249,17 +288,20 @@ def check_session():
 EXPIRATION_HOURS = 24
 
 def delete_expired_unverified_users():
+    logger.info("Starting cleanup of expired unverified users")
     expiry_time = datetime.utcnow() - timedelta(hours=EXPIRATION_HOURS)
     expired_users = User.query.filter(
         User.is_verified == False,
         User.created_at < expiry_time
     ).all()
 
+    logger.debug(f"Found {len(expired_users)} expired unverified users")
     for user in expired_users:
-        print(f"Deleting unverified user: {user.email}")
+        logger.info(f"Deleting unverified user: {user.email} (created: {user.created_at})")
         db.session.delete(user)
 
     db.session.commit()
+    logger.info(f"Cleanup completed: {len(expired_users)} users deleted")
     return len(expired_users)
 
 from apscheduler.schedulers.background import BackgroundScheduler
@@ -268,7 +310,8 @@ scheduler = BackgroundScheduler()
 
 @scheduler.scheduled_job("interval", hours=1)
 def cleanup_job():
+    logger.info("Scheduled cleanup job started")
     deleted = delete_expired_unverified_users()
-    print(f"Deleted {deleted} expired unverified users")
+    logger.info(f"Scheduled cleanup completed: {deleted} expired unverified users deleted")
 
 scheduler.start()

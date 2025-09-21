@@ -2,6 +2,10 @@ from app import db
 from datetime import datetime
 from flask_login import UserMixin
 from werkzeug.security import generate_password_hash, check_password_hash
+import logging
+
+# Create logger for this module
+logger = logging.getLogger(__name__)
 
 class User(UserMixin, db.Model):
     id = db.Column(db.Integer, primary_key=True)
@@ -14,10 +18,15 @@ class User(UserMixin, db.Model):
     created_at = db.Column(db.DateTime, default=datetime.now())
 
     def set_password(self, password):
+        logger.debug(f"Setting password for user: {self.email}")
         self.password_hash = generate_password_hash(password)
+        logger.debug("Password hash generated successfully")
     
     def check_password(self, password):
-        return check_password_hash(self.password_hash, password)
+        logger.debug(f"Checking password for user: {self.email}")
+        result = check_password_hash(self.password_hash, password)
+        logger.debug(f"Password check result: {result}")
+        return result
     
 class Conversation(db.Model):
     id = db.Column(db.Integer, primary_key=True)

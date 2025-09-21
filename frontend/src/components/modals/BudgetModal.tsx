@@ -52,7 +52,7 @@ const BudgetModal = ({ open, onOpenChange, onSubmit }: BudgetModalProps) => {
               onClick={handleClose}
             >
               <img
-                src="assets/All Icon Used/material-symbols_close-rounded.png"
+                src="\assets\All Icon Used\material-symbols_close-rounded.png"
                 alt="close"
                 className="w-6 h-6"
               />

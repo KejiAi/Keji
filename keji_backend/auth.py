@@ -1,5 +1,5 @@
 from flask import Blueprint, request, jsonify, session, make_response, redirect
-from app import db, mail
+from app import db, mail, app
 import string
 from models import User
 from werkzeug.security import generate_password_hash
@@ -255,10 +255,24 @@ def logout():
     response = make_response(jsonify({"message": "Logged out"}), 200)
     
     # Clear remember token cookie with same settings as when it was set
-    response.set_cookie('remember_token', '', expires=0, path='/', samesite='Lax', httponly=True)
+    response.set_cookie(
+        'remember_token', '', expires=0, 
+        path=app.config.get("REMEMBER_COOKIE_PATH", "/"),
+        samesite=app.config.get("REMEMBER_COOKIE_SAMESITE", "Lax"),
+        secure=app.config.get("REMEMBER_COOKIE_SECURE", False),
+        httponly=app.config.get("REMEMBER_COOKIE_HTTPONLY", True),
+        domain=app.config.get("REMEMBER_COOKIE_DOMAIN", None),
+    )
     
     # Clear session cookie (in case it exists)
-    response.set_cookie('session', '', expires=0, path='/', samesite='Lax', httponly=True)
+    response.set_cookie(
+        app.session_cookie_name, '', expires=0,
+        path=app.config.get("SESSION_COOKIE_PATH", "/"),
+        samesite=app.config.get("SESSION_COOKIE_SAMESITE", "Lax"),
+        secure=app.config.get("SESSION_COOKIE_SECURE", False),
+        httponly=app.config.get("SESSION_COOKIE_HTTPONLY", True),
+        domain=app.config.get("SESSION_COOKIE_DOMAIN", None),
+    )
     
     logger.info(f"User logged out: {user_name}")
     return response

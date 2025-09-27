@@ -261,6 +261,9 @@ def logout():
     logger.info(f"REMEMBER_COOKIE_SAMESITE = {app.config.get('REMEMBER_COOKIE_SAMESITE')}")
     logger.info(f"SESSION_COOKIE_SAMESITE = {app.config.get('SESSION_COOKIE_SAMESITE')}")
 
+    logger.info(f"REMEMBER_COOKIE_NAME = {app.config.get('REMEMBER_COOKIE_NAME')}")
+    logger.info(f"SESSION_COOKIE_NAME = {app.config.get('SESSION_COOKIE_NAME')}")
+
     response = make_response(jsonify({"message": "Logged out"}), 200)
 
     # Clear remember token cookie with same settings as when it was set
@@ -275,13 +278,14 @@ def logout():
 
     # Clear session cookie (in case it exists)
     response.set_cookie(
-        app.session_cookie_name, "", expires=0,
+        app.config.get("SESSION_COOKIE_NAME", "session"), "", expires=0,
         path=app.config.get("SESSION_COOKIE_PATH", "/"),
         samesite=app.config.get("SESSION_COOKIE_SAMESITE", "Lax"),
         secure=app.config.get("SESSION_COOKIE_SECURE", False),
         httponly=app.config.get("SESSION_COOKIE_HTTPONLY", True),
         domain=app.config.get("SESSION_COOKIE_DOMAIN", None),
     )
+    # response.delete_cookie(app.config.get("SESSION_COOKIE_NAME", "session"))  # Flask default session cookie name
 
     logger.info(f"User logged out: {user_name}")
     return response

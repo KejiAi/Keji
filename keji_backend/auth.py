@@ -53,6 +53,8 @@ def signup():
     logger.info(f"User created successfully: {email} (ID: {user.id})")
 
     # Build link
+    logger.debug("Building verification link")
+    logger.debug(f"Backend URL: {os.getenv('BACKEND_URL_LOCAL')}")
     verify_link = f"{os.getenv('BACKEND_URL_LOCAL')}/verify-email/{token}"
     logger.debug(f"verify link generated: {verify_link}")
 

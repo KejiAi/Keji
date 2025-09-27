@@ -54,6 +54,7 @@ def signup():
 
     # Build link
     verify_link = f"{os.getenv('BACKEND_URL_LOCAL')}/verify-email/{token}"
+    logger.debug(f"verify link generated: {verify_link}")
 
     # email service
     msg = Message(
@@ -252,17 +253,17 @@ def logout():
     session.clear()  # Clear all session data
 
     # Debug: print out the cookie config values being used
-    logger.info(f"REMEMBER_COOKIE_DOMAIN = {app.config.get('REMEMBER_COOKIE_DOMAIN')}")
-    logger.info(f"SESSION_COOKIE_DOMAIN  = {app.config.get('SESSION_COOKIE_DOMAIN')}")
+    # logger.info(f"REMEMBER_COOKIE_DOMAIN = {app.config.get('REMEMBER_COOKIE_DOMAIN')}")
+    # logger.info(f"SESSION_COOKIE_DOMAIN  = {app.config.get('SESSION_COOKIE_DOMAIN')}")
 
-    logger.info(f"REMEMBER_COOKIE_SECURE = {app.config.get('REMEMBER_COOKIE_SECURE')}")
-    logger.info(f"SESSION_COOKIE_SECURE  = {app.config.get('SESSION_COOKIE_SECURE')}")
+    # logger.info(f"REMEMBER_COOKIE_SECURE = {app.config.get('REMEMBER_COOKIE_SECURE')}")
+    # logger.info(f"SESSION_COOKIE_SECURE  = {app.config.get('SESSION_COOKIE_SECURE')}")
     
-    logger.info(f"REMEMBER_COOKIE_SAMESITE = {app.config.get('REMEMBER_COOKIE_SAMESITE')}")
-    logger.info(f"SESSION_COOKIE_SAMESITE = {app.config.get('SESSION_COOKIE_SAMESITE')}")
+    # logger.info(f"REMEMBER_COOKIE_SAMESITE = {app.config.get('REMEMBER_COOKIE_SAMESITE')}")
+    # logger.info(f"SESSION_COOKIE_SAMESITE = {app.config.get('SESSION_COOKIE_SAMESITE')}")
 
-    logger.info(f"REMEMBER_COOKIE_NAME = {app.config.get('REMEMBER_COOKIE_NAME')}")
-    logger.info(f"SESSION_COOKIE_NAME = {app.config.get('SESSION_COOKIE_NAME')}")
+    # logger.info(f"REMEMBER_COOKIE_NAME = {app.config.get('REMEMBER_COOKIE_NAME')}")
+    # logger.info(f"SESSION_COOKIE_NAME = {app.config.get('SESSION_COOKIE_NAME')}")
 
     response = make_response(jsonify({"message": "Logged out"}), 200)
 
@@ -285,7 +286,6 @@ def logout():
         httponly=app.config.get("SESSION_COOKIE_HTTPONLY", True),
         domain=app.config.get("SESSION_COOKIE_DOMAIN", None),
     )
-    # response.delete_cookie(app.config.get("SESSION_COOKIE_NAME", "session"))  # Flask default session cookie name
 
     logger.info(f"User logged out: {user_name}")
     return response

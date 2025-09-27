@@ -250,32 +250,42 @@ def logout():
     user_name = current_user.name
     logout_user()
     session.clear()  # Clear all session data
+
+    # Debug: print out the cookie config values being used
+    logger.info(f"REMEMBER_COOKIE_DOMAIN = {app.config.get('REMEMBER_COOKIE_DOMAIN')}")
+    logger.info(f"SESSION_COOKIE_DOMAIN  = {app.config.get('SESSION_COOKIE_DOMAIN')}")
+
+    logger.info(f"REMEMBER_COOKIE_SECURE = {app.config.get('REMEMBER_COOKIE_SECURE')}")
+    logger.info(f"SESSION_COOKIE_SECURE  = {app.config.get('SESSION_COOKIE_SECURE')}")
     
-    # Create response and explicitly clear all authentication cookies
+    logger.info(f"REMEMBER_COOKIE_SAMESITE = {app.config.get('REMEMBER_COOKIE_SAMESITE')}")
+    logger.info(f"SESSION_COOKIE_SAMESITE = {app.config.get('SESSION_COOKIE_SAMESITE')}")
+
     response = make_response(jsonify({"message": "Logged out"}), 200)
-    
+
     # Clear remember token cookie with same settings as when it was set
     response.set_cookie(
-        'remember_token', '', expires=0, 
+        "remember_token", "", expires=0,
         path=app.config.get("REMEMBER_COOKIE_PATH", "/"),
         samesite=app.config.get("REMEMBER_COOKIE_SAMESITE", "Lax"),
         secure=app.config.get("REMEMBER_COOKIE_SECURE", False),
         httponly=app.config.get("REMEMBER_COOKIE_HTTPONLY", True),
         domain=app.config.get("REMEMBER_COOKIE_DOMAIN", None),
     )
-    
+
     # Clear session cookie (in case it exists)
     response.set_cookie(
-        app.session_cookie_name, '', expires=0,
+        app.session_cookie_name, "", expires=0,
         path=app.config.get("SESSION_COOKIE_PATH", "/"),
         samesite=app.config.get("SESSION_COOKIE_SAMESITE", "Lax"),
         secure=app.config.get("SESSION_COOKIE_SECURE", False),
         httponly=app.config.get("SESSION_COOKIE_HTTPONLY", True),
         domain=app.config.get("SESSION_COOKIE_DOMAIN", None),
     )
-    
+
     logger.info(f"User logged out: {user_name}")
     return response
+
 
 
 @auth_bp.route("/check-session", methods=["GET"])

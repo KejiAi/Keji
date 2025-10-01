@@ -2,7 +2,6 @@ from flask import Blueprint, request, jsonify, session, make_response, redirect
 from app import db, mail, app
 import string
 from models import User
-from werkzeug.security import generate_password_hash
 from flask_login import login_user, logout_user, login_required, current_user
 import logging
 import random

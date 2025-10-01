@@ -14,39 +14,129 @@ chat_bp = Blueprint("chat", __name__)
 UPLOAD_FOLDER = "uploads"
 os.makedirs(UPLOAD_FOLDER, exist_ok=True) 
 
+# def call_llm(messages):
+#     logger.debug(f"Calling LLM with {len(messages)} messages")
+#     logger.debug(f"Message history: {[msg.get('role', 'unknown') for msg in messages]}")
+    
+#     responses = [
+#         # very short words
+#         "Hi", "Yes",
+        
+#         # very short strings
+#         "Hello world!",
+        
+#         # medium strings
+#         "This makes sense.", 
+#         "I agree completely.", 
+#         "Do you want to continue?",
+        
+#         # long words 
+#         "pneumonoultramicroscopicsilicovolcanoconiosispneumonoultramicroscopicsilicovolcanoconiosispneumonoultramicroscopicsilicovolcanoconiosispneumonoultramicroscopicsilicovolcanoconiosispneumonoultramicroscopicsilicovolcanoconiosispneumonoultramicroscopicsilicovolcanoconiosispneumonoultramicroscopicsilicovolcanoconiosis",
+        
+#         # long strings (now much longer)
+#         "Sometimes the best way to test a language model or function is to push it with both very short and incredibly long pieces of text. This ensures robustness in a variety of contexts, because real conversations are messy, unpredictable, and full of sudden shifts in tone. You might start with a one-word answer, then transition into a mini-essay. You might interject with a nonsense word, then follow with a carefully reasoned explanation. By feeding the function everything from the tiniest particles of language to sprawling multi-clause structures, you can guarantee that the system won't choke when reality hits.",
+        
+#         "Here is a deliberately long passage, written in a verbose and meandering style, with the sole purpose of making sure your code is resilient against excessively wordy inputs. Imagine, if you will, a user who simply refuses to stop typing: they pile on adjective after adjective, clause after clause, weaving together a tapestry of words that drags on far longer than is reasonable. Your system, of course, needs to accept this flood of text without complaint, store it, perhaps even process it, and ultimately return something coherent. This sentence keeps expanding, testing the buffer, pushing the limits, and proving once and for all that length alone should never break functionality.",
+        
+#         # mixture of long + short words
+#         "Yes antidisestablishmentarianism now wait supercalifragilisticexpialidocious done.",
+#         "Short bigwordlikepneumonoultramicroscopicsilicovolcanoconiosis quick tinywords go!",
+#         "Tiny word hugewordfloccinaucinihilipilification mix short mixlong done again now."
+#     ]
+    
+#     response = random.choice(responses)
+#     logger.debug(f"LLM response generated: {response[:100]}{'...' if len(response) > 100 else ''}")
+#     return response
+
 def call_llm(messages):
     logger.debug(f"Calling LLM with {len(messages)} messages")
     logger.debug(f"Message history: {[msg.get('role', 'unknown') for msg in messages]}")
-    
-    responses = [
-        # very short words
-        "Hi", "Yes",
-        
-        # very short strings
+
+    # Possible normal chat responses
+    chat_responses = [
+        "Hi",
         "Hello world!",
-        
-        # medium strings
-        "This makes sense.", 
-        "I agree completely.", 
-        "Do you want to continue?",
-        
-        # long words 
-        "pneumonoultramicroscopicsilicovolcanoconiosispneumonoultramicroscopicsilicovolcanoconiosispneumonoultramicroscopicsilicovolcanoconiosispneumonoultramicroscopicsilicovolcanoconiosispneumonoultramicroscopicsilicovolcanoconiosispneumonoultramicroscopicsilicovolcanoconiosispneumonoultramicroscopicsilicovolcanoconiosis",
-        
-        # long strings (now much longer)
-        "Sometimes the best way to test a language model or function is to push it with both very short and incredibly long pieces of text. This ensures robustness in a variety of contexts, because real conversations are messy, unpredictable, and full of sudden shifts in tone. You might start with a one-word answer, then transition into a mini-essay. You might interject with a nonsense word, then follow with a carefully reasoned explanation. By feeding the function everything from the tiniest particles of language to sprawling multi-clause structures, you can guarantee that the system won't choke when reality hits.",
-        
-        "Here is a deliberately long passage, written in a verbose and meandering style, with the sole purpose of making sure your code is resilient against excessively wordy inputs. Imagine, if you will, a user who simply refuses to stop typing: they pile on adjective after adjective, clause after clause, weaving together a tapestry of words that drags on far longer than is reasonable. Your system, of course, needs to accept this flood of text without complaint, store it, perhaps even process it, and ultimately return something coherent. This sentence keeps expanding, testing the buffer, pushing the limits, and proving once and for all that length alone should never break functionality.",
-        
-        # mixture of long + short words
         "Yes antidisestablishmentarianism now wait supercalifragilisticexpialidocious done.",
-        "Short bigwordlikepneumonoultramicroscopicsilicovolcanoconiosis quick tinywords go!",
-        "Tiny word hugewordfloccinaucinihilipilification mix short mixlong done again now."
+        "pneumonoultramicroscopicsilicovolcanoconiosispneumonoultramicroscopicsilicovolcanoconiosispneumonoultramicroscopicsilicovolcanoconiosispneumonoultramicroscopicsilicovolcanoconiosispneumonoultramicroscopicsilicovolcanoconiosispneumonoultramicroscopicsilicovolcanoconiosispneumonoultramicroscopicsilicovolcanoconiosis",
+        "Here is a deliberately long passage, written in a verbose and meandering style, with the sole purpose of making sure your code is resilient against excessively wordy inputs. Imagine, if you will, a user who simply refuses to stop typing: they pile on adjective after adjective, clause after clause, weaving together a tapestry of words that drags on far longer than is reasonable. Your system, of course, needs to accept this flood of text without complaint, store it, perhaps even process it, and ultimately return something coherent. This sentence keeps expanding, testing the buffer, pushing the limits, and proving once and for all that length alone should never break functionality.",
     ]
-    
-    response = random.choice(responses)
-    logger.debug(f"LLM response generated: {response[:100]}{'...' if len(response) > 100 else ''}")
+
+    # Possible food recommendations
+    recommendation_responses = [
+        {
+            "title": "Rice and Beans Concoction",
+            "content": "You fit go to the street to get a plate of rice from any buka near you. "
+                    "Make sure their food is neat and hygienic though, your budget no fit buy good food sha.",
+            "health": [
+                {
+                    "label": "Complete Protein",
+                    "description": "Rice lacks lysine, and beans lack methionine. Together, they form a complete protein with all essential amino acids."
+                },
+                {
+                    "label": "High Fiber",
+                    "description": "Promotes satiety, regulates blood sugar, and supports gut health."
+                },
+                {
+                    "label": "Plant-Based",
+                    "description": "Ideal for vegetarian or vegan diets."
+                }
+            ]
+        },
+        {
+            "title": "Suya with Cold Drink",
+            "content": "Find a suya spot near you, preferably one that grills fresh meat. "
+                    "Pair it with a cold mineral for maximum enjoyment.",
+            "health": [
+                {
+                    "label": "High Protein",
+                    "description": "Suya provides protein for muscle repair and energy."
+                },
+                {
+                    "label": "Caution",
+                    "description": "Processed drinks may be high in sugar, so consume in moderation."
+                }
+            ]
+        },
+        {
+            "title": "Efo Riro with Semovita",
+            "content": "A good swallow meal dey always hit. If you sabi cook, prepare your efo with assorted. "
+                    "Otherwise, look for a local buka wey dem sabi better Yoruba soup.",
+            "health": [
+                {
+                    "label": "Rich in Iron & Vitamins",
+                    "description": "Efo riro is packed with leafy greens, supporting blood health and boosting immunity."
+                },
+                {
+                    "label": "Balanced Meal",
+                    "description": "Semovita provides carbohydrates for energy, while the soup delivers protein and micronutrients."
+                }
+            ]
+        }
+    ]
+
+
+
+    # Randomly decide whether to return chat or recommendation
+    if random.random() < 1:  # 50% chance it's a recommendation
+        rec = random.choice(recommendation_responses)
+        response = {
+            "type": "recommendation",
+            "role": "assistant",
+            "title": rec["title"] if "title" in rec else None,
+            "content": rec["content"] if "content" in rec else None,
+            "health": rec["health"] if "health" in rec else None
+        }
+    else:
+        chat_text = random.choice(chat_responses)
+        response = {
+            "type": "chat",
+            "role": "assistant",
+            "content": chat_text
+        }
+
+    logger.debug(f"LLM response generated: {response}")
     return response
+
 
 # def handle_uploaded_files(files):
 #     """
@@ -63,25 +153,72 @@ def call_llm(messages):
 #     return saved_files
 
 
+# @chat_bp.route("/chat", methods=["POST"])
+# @login_required
+# def chat():
+#     logger.info(f"Chat request received from user: {current_user.name} (ID: {current_user.id})")
+    
+#     user_message = request.form.get("message")  # text
+#     files = request.files.getlist("files")
+    
+#     logger.debug(f"User message: {user_message}")
+#     logger.debug(f"Number of files uploaded: {len(files)}")
+    
+#     # Log file information
+#     for f in files:
+#         if f.filename:
+#             logger.debug(f"File uploaded: {f.filename} (size: {f.content_length} bytes)")
+#         else:
+#             logger.debug("Empty file upload detected")
+    
+#     """I will come back to file handling later"""
+
+#     # 1. Find or create latest conversation
+#     conversation = Conversation.query.filter_by(user_id=current_user.id)\
+#         .order_by(Conversation.id.desc()).first()
+#     if not conversation:
+#         conversation = Conversation(user_id=current_user.id)
+#         db.session.add(conversation)
+#         db.session.commit()
+#         logger.info(f"Created new conversation for user {current_user.id} (conversation ID: {conversation.id})")
+#     else:
+#         logger.debug(f"Using existing conversation ID: {conversation.id}")
+
+#     # 2. Save user message
+#     user_msg = Message(conversation_id=conversation.id, sender="user", text=user_message)
+#     db.session.add(user_msg)
+#     logger.debug(f"Saved user message to conversation {conversation.id}")
+
+#     # 3. Gather context (last N messages, e.g., 10)
+#     history = Message.query.filter_by(conversation_id=conversation.id)\
+#         .order_by(Message.timestamp.asc()).all()
+#     messages = [{"role": m.sender, "content": m.text} for m in history]
+#     messages.append({"role": "user", "content": user_message})
+    
+#     logger.debug(f"Gathered {len(history)} previous messages for context")
+
+#     # 4. Call LLM
+#     bot_reply = call_llm(messages)
+
+#     # 5. Save bot reply
+#     bot_msg = Message(conversation_id=conversation.id, sender="bot", text=bot_reply)
+#     db.session.add(bot_msg)
+#     db.session.commit()
+    
+#     logger.info(f"Chat completed successfully for user {current_user.id}. Bot reply length: {len(bot_reply)} characters")
+
+#     return jsonify({"reply": bot_reply}), 200
+
 @chat_bp.route("/chat", methods=["POST"])
 @login_required
 def chat():
     logger.info(f"Chat request received from user: {current_user.name} (ID: {current_user.id})")
     
-    user_message = request.form.get("message")  # text
+    user_message = request.form.get("message")
     files = request.files.getlist("files")
-    
+
     logger.debug(f"User message: {user_message}")
     logger.debug(f"Number of files uploaded: {len(files)}")
-    
-    # Log file information
-    for f in files:
-        if f.filename:
-            logger.debug(f"File uploaded: {f.filename} (size: {f.content_length} bytes)")
-        else:
-            logger.debug("Empty file upload detected")
-    
-    """I will come back to file handling later"""
 
     # 1. Find or create latest conversation
     conversation = Conversation.query.filter_by(user_id=current_user.id)\
@@ -94,30 +231,56 @@ def chat():
     else:
         logger.debug(f"Using existing conversation ID: {conversation.id}")
 
-    # 2. Save user message
+    # 2. Save user message always
     user_msg = Message(conversation_id=conversation.id, sender="user", text=user_message)
     db.session.add(user_msg)
     logger.debug(f"Saved user message to conversation {conversation.id}")
 
-    # 3. Gather context (last N messages, e.g., 10)
+    # 3. Gather history
     history = Message.query.filter_by(conversation_id=conversation.id)\
         .order_by(Message.timestamp.asc()).all()
     messages = [{"role": m.sender, "content": m.text} for m in history]
     messages.append({"role": "user", "content": user_message})
     
-    logger.debug(f"Gathered {len(history)} previous messages for context")
-
     # 4. Call LLM
     bot_reply = call_llm(messages)
 
-    # 5. Save bot reply
-    bot_msg = Message(conversation_id=conversation.id, sender="bot", text=bot_reply)
+    # 5. Decide how to handle
+    if isinstance(bot_reply, dict) and bot_reply.get("type") == "recommendation":
+        # 🚨 Don't save to DB yet
+        logger.info("Generated a recommendation, not saving yet")
+        return jsonify(bot_reply), 200
+    else:
+        # Normal chat: save immediately
+        reply_text = bot_reply["content"] if isinstance(bot_reply, dict) else str(bot_reply)
+        bot_msg = Message(conversation_id=conversation.id, sender="bot", text=reply_text)
+        db.session.add(bot_msg)
+        db.session.commit()
+        logger.info(f"Chat completed successfully. Saved bot reply for user {current_user.id}")
+        return jsonify({"type": "chat", "role": "assistant", "content": reply_text}), 200
+
+@chat_bp.route("/accept_recommendation", methods=["POST"])
+@login_required
+def accept_recommendation():
+    data = request.get_json()
+    title = data.get("title")
+    content = data.get("content")
+
+    # Find latest conversation
+    conversation = Conversation.query.filter_by(user_id=current_user.id)\
+        .order_by(Conversation.id.desc()).first()
+
+    # Save recommendation as a bot message
+    bot_msg = Message(
+        conversation_id=conversation.id,
+        sender="bot",
+        text=f"{title}: {content}"
+    )
     db.session.add(bot_msg)
     db.session.commit()
-    
-    logger.info(f"Chat completed successfully for user {current_user.id}. Bot reply length: {len(bot_reply)} characters")
 
-    return jsonify({"reply": bot_reply}), 200
+    return jsonify({"status": "saved"}), 200
+
 
 
 @chat_bp.route("/chat/history", methods=["GET"])

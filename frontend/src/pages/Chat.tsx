@@ -7,6 +7,7 @@ import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { getBackendUrl } from "@/lib/utils";
 import { useSession } from "@/contexts/SessionContext";
+import RecommendationPopup from "@/components/modals/RecommendationPopup";
 
 const frontendUrl = import.meta.env.VITE_FRONTEND_BASE_URL;
 
@@ -17,6 +18,21 @@ interface Message {
   timestamp: Date;
 }
 
+interface BackendResponse {
+  type: "chat" | "recommendation";
+  role: "assistant";
+  content?: string;
+  title?: string;
+  health?: string;
+  reply?: string; // For backward compatibility
+}
+
+interface Recommendation {
+  title: string;
+  content: string;
+  health?: string;
+}
+
 const Chat = () => {
   const navigate = useNavigate();
   const location = useLocation();
@@ -25,6 +41,7 @@ const Chat = () => {
   const [inputMessage, setInputMessage] = useState("");
   const [loading, setLoading] = useState(false);
   const [selectedFiles, setSelectedFiles] = useState<File[]>([]);
+  const [recommendation, setRecommendation] = useState<Recommendation | null>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
@@ -157,14 +174,25 @@ const Chat = () => {
       });
 
       if (response.ok) {
-        const data = await response.json();
-        const aiMessage: Message = {
-          id: (Date.now() + 1).toString(),
-          text: data.reply || "Yeah, how can I help you?",
-          sender: "ai",
-          timestamp: new Date(),
-        };
-        setMessages((prev) => [...prev, aiMessage]);
+        const data: BackendResponse = await response.json();
+        
+        if (data.type === "recommendation") {
+          // Handle recommendation popup
+          setRecommendation({
+            title: data.title || "Food Recommendation",
+            content: data.content || "Here's a food suggestion for you.",
+            health: data.health
+          });
+        } else {
+          // Handle normal chat message
+          const aiMessage: Message = {
+            id: (Date.now() + 1).toString(),
+            text: data.content || "Yeah, how can I help you?",
+            sender: "ai",
+            timestamp: new Date(),
+          };
+          setMessages((prev) => [...prev, aiMessage]);
+        }
       } else {
         throw new Error("Failed to send message");
       }
@@ -218,6 +246,15 @@ const Chat = () => {
 
   const removeFile = (index: number) => {
     setSelectedFiles(prev => prev.filter((_, i) => i !== index));
+  };
+
+  const handleRecommendationClose = () => {
+    setRecommendation(null);
+  };
+
+  const handleRecommendationAccept = (acceptanceMessage: string) => {
+    setRecommendation(null);
+    sendMessage(acceptanceMessage);
   };
 
   // Show loading while session is being validated
@@ -487,6 +524,13 @@ const Chat = () => {
           </div>
         </div>
       </div>
+
+      {/* Recommendation Popup */}
+      <RecommendationPopup
+        recommendation={recommendation}
+        onClose={handleRecommendationClose}
+        onAccept={handleRecommendationAccept}
+      />
     </PageContainer>
   );
 };

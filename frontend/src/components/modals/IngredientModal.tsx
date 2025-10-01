@@ -98,7 +98,7 @@ const IngredientModal = ({ open, onOpenChange, onSubmit }: IngredientModalProps)
                     className="h-12 w-12 p-0 rounded-full bg-muted"
                     disabled={!customIngredient.trim()}
                   >
-                    <img src="assets/All Icon Used/jam_plus.png" alt="add" className="w-full h-full object-contain" />
+                    <img src="\assets/All Icon Used/jam_plus.png" alt="add" className="w-full h-full object-contain" />
                   </Button>
                 </div>
       

@@ -117,7 +117,7 @@ def call_llm(messages):
 
 
     # Randomly decide whether to return chat or recommendation
-    if random.random() < 1:  # 50% chance it's a recommendation
+    if random.random() < 0.45:  # 45% chance it's a recommendation
         rec = random.choice(recommendation_responses)
         response = {
             "type": "recommendation",

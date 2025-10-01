@@ -14,40 +14,6 @@ chat_bp = Blueprint("chat", __name__)
 UPLOAD_FOLDER = "uploads"
 os.makedirs(UPLOAD_FOLDER, exist_ok=True) 
 
-# def call_llm(messages):
-#     logger.debug(f"Calling LLM with {len(messages)} messages")
-#     logger.debug(f"Message history: {[msg.get('role', 'unknown') for msg in messages]}")
-    
-#     responses = [
-#         # very short words
-#         "Hi", "Yes",
-        
-#         # very short strings
-#         "Hello world!",
-        
-#         # medium strings
-#         "This makes sense.", 
-#         "I agree completely.", 
-#         "Do you want to continue?",
-        
-#         # long words 
-#         "pneumonoultramicroscopicsilicovolcanoconiosispneumonoultramicroscopicsilicovolcanoconiosispneumonoultramicroscopicsilicovolcanoconiosispneumonoultramicroscopicsilicovolcanoconiosispneumonoultramicroscopicsilicovolcanoconiosispneumonoultramicroscopicsilicovolcanoconiosispneumonoultramicroscopicsilicovolcanoconiosis",
-        
-#         # long strings (now much longer)
-#         "Sometimes the best way to test a language model or function is to push it with both very short and incredibly long pieces of text. This ensures robustness in a variety of contexts, because real conversations are messy, unpredictable, and full of sudden shifts in tone. You might start with a one-word answer, then transition into a mini-essay. You might interject with a nonsense word, then follow with a carefully reasoned explanation. By feeding the function everything from the tiniest particles of language to sprawling multi-clause structures, you can guarantee that the system won't choke when reality hits.",
-        
-#         "Here is a deliberately long passage, written in a verbose and meandering style, with the sole purpose of making sure your code is resilient against excessively wordy inputs. Imagine, if you will, a user who simply refuses to stop typing: they pile on adjective after adjective, clause after clause, weaving together a tapestry of words that drags on far longer than is reasonable. Your system, of course, needs to accept this flood of text without complaint, store it, perhaps even process it, and ultimately return something coherent. This sentence keeps expanding, testing the buffer, pushing the limits, and proving once and for all that length alone should never break functionality.",
-        
-#         # mixture of long + short words
-#         "Yes antidisestablishmentarianism now wait supercalifragilisticexpialidocious done.",
-#         "Short bigwordlikepneumonoultramicroscopicsilicovolcanoconiosis quick tinywords go!",
-#         "Tiny word hugewordfloccinaucinihilipilification mix short mixlong done again now."
-#     ]
-    
-#     response = random.choice(responses)
-#     logger.debug(f"LLM response generated: {response[:100]}{'...' if len(response) > 100 else ''}")
-#     return response
-
 def call_llm(messages):
     logger.debug(f"Calling LLM with {len(messages)} messages")
     logger.debug(f"Message history: {[msg.get('role', 'unknown') for msg in messages]}")

@@ -414,7 +414,7 @@ const Chat = () => {
 
         {/* Input section (sticky bottom, always visible) */}
         <div className={`flex-shrink-0 sticky bottom-0 bg-background transition-opacity ${recommendation ? 'opacity-50 pointer-events-none' : 'opacity-100'}`}>
-          <div className="max-w-2xl mx-auto py-2">
+          <div className="w-full px-2 py-2">
             {/* File preview section */}
             {selectedFiles.length > 0 && (
               <div className="mb-2 px-2">
@@ -454,7 +454,7 @@ const Chat = () => {
                 </div>
               </div>
             )}
-            <div className="flex items-end gap-2">
+            <div className="flex items-end gap-2 w-full">
               <input
                 ref={fileInputRef}
                 type="file"
@@ -465,7 +465,7 @@ const Chat = () => {
               />
 
               <div 
-                className="flex items-end p-2 bg-background-light border border-background_dark/50 shadow-base rounded-3xl transition-all duration-200"
+                className="flex items-end p-2 bg-background-light border border-background_dark/50 shadow-base rounded-3xl transition-all duration-200 flex-1"
                 style={{ 
                   borderRadius: `${borderRadius}px`,
                   minHeight: `${textareaHeight + 12}px`
@@ -534,7 +534,7 @@ const Chat = () => {
               <Button
                 variant="ghost"
                 size="icon"
-                className="rounded-full p-0 hover:opacity-80 transition h-12 w-12"
+                className="rounded-full p-0 hover:opacity-80 transition h-12 w-12 flex-shrink-0"
                 disabled={!!recommendation}
               >
                 <img

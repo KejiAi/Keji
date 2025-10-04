@@ -5,6 +5,7 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { BrowserRouter, Routes, Route } from "react-router-dom";
 import { SessionProvider } from "@/contexts/SessionContext";
 import ProtectedRoute from "./components/ProtectedRoute";
+import MobileOnlyWrapper from "./components/common/MobileOnlyWrapper";
 import Index from "./pages/Index";
 import Start from "./pages/Start";
 import EmailVerification from "./pages/EmailVerification";
@@ -22,17 +23,19 @@ const App = () => (
       <Sonner />
       <BrowserRouter>
         <SessionProvider>
-          <Routes>
-            <Route path="/" element={<Index />} />
-            <Route path="/start" element={<Start />} />
-            <Route path="/verify-email" element={<EmailVerification />} />
-            <Route path="/homepage" element={<ProtectedRoute><Homepage /></ProtectedRoute>} />
-            <Route path="/chat" element={<ProtectedRoute><Chat /></ProtectedRoute>} />
-            <Route path="/profile" element={<ProtectedRoute><Profile /></ProtectedRoute>} />
-            {/* All errors + 404s handled by NotFound */}
-            <Route path="/error" element={<NotFound />} />
-            <Route path="*" element={<NotFound />} />
-          </Routes>
+          <MobileOnlyWrapper>
+            <Routes>
+              <Route path="/" element={<Index />} />
+              <Route path="/start" element={<Start />} />
+              <Route path="/verify-email" element={<EmailVerification />} />
+              <Route path="/homepage" element={<ProtectedRoute><Homepage /></ProtectedRoute>} />
+              <Route path="/chat" element={<ProtectedRoute><Chat /></ProtectedRoute>} />
+              <Route path="/profile" element={<ProtectedRoute><Profile /></ProtectedRoute>} />
+              {/* All errors + 404s handled by NotFound */}
+              <Route path="/error" element={<NotFound />} />
+              <Route path="*" element={<NotFound />} />
+            </Routes>
+          </MobileOnlyWrapper>
         </SessionProvider>
       </BrowserRouter>
     </TooltipProvider>

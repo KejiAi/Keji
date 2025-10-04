@@ -25,7 +25,7 @@ def signup():
     logger.info("Sign-up request received")
     data = request.get_json()
     name = data.get("name")
-    email = data.get("email")
+    email = data.get("email").lower()
     password = data.get("password")
 
     logger.debug(f"Sign-up attempt for email: {email}, name: {name}")
@@ -115,7 +115,7 @@ def verify_link(token):
 def verify_code():
     logger.info("Email verification code request received")
     data = request.get_json()
-    email = data.get("email")
+    email = data.get("email").lower()
     code = data.get("code")
 
     logger.debug(f"Verification attempt for email: {email} with code: {code}")
@@ -140,7 +140,7 @@ def verify_code():
 @auth_bp.route("/verify-email/resend", methods=["POST"])
 def resend_code():
     data = request.get_json()
-    email = data.get("email")
+    email = data.get("email").lower()
 
     user = User.query.filter_by(email=email).first()
     if not user:
@@ -165,7 +165,7 @@ def resend_code():
 def login():
     logger.info("Login request received")
     data = request.get_json()
-    email = data.get("email")
+    email = data.get("email").lower()
     password = data.get("password")
 
     logger.debug(f"Login attempt for email: {email}")
@@ -194,7 +194,7 @@ def generate_temp_password(length=10):
 def forgot_password():
     logger.info("Forgot password request received")
     data = request.get_json()
-    email = data.get("email")
+    email = data.get("email").lower()
 
     if not email:
         logger.warning("Forgot password failed: No email provided")

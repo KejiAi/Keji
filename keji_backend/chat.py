@@ -67,16 +67,16 @@ def call_llm(messages):
             "title": "Efo Riro with Semovita",
             "content": "A good swallow meal dey always hit. If you sabi cook, prepare your efo with assorted. "
                     "Otherwise, look for a local buka wey dem sabi better Yoruba soup.",
-            "health": [
-                {
-                    "label": "Rich in Iron & Vitamins",
-                    "description": "Efo riro is packed with leafy greens, supporting blood health and boosting immunity."
-                },
-                {
-                    "label": "Balanced Meal",
-                    "description": "Semovita provides carbohydrates for energy, while the soup delivers protein and micronutrients."
-                }
-            ]
+            # "health": [
+            #     {
+            #         "label": "Rich in Iron & Vitamins",
+            #         "description": "Efo riro is packed with leafy greens, supporting blood health and boosting immunity."
+            #     },
+            #     {
+            #         "label": "Balanced Meal",
+            #         "description": "Semovita provides carbohydrates for energy, while the soup delivers protein and micronutrients."
+            #     }
+            # ]
         }
     ]
 
@@ -118,62 +118,6 @@ def call_llm(messages):
 #             saved_files.append(filepath)
 #     return saved_files
 
-
-# @chat_bp.route("/chat", methods=["POST"])
-# @login_required
-# def chat():
-#     logger.info(f"Chat request received from user: {current_user.name} (ID: {current_user.id})")
-    
-#     user_message = request.form.get("message")  # text
-#     files = request.files.getlist("files")
-    
-#     logger.debug(f"User message: {user_message}")
-#     logger.debug(f"Number of files uploaded: {len(files)}")
-    
-#     # Log file information
-#     for f in files:
-#         if f.filename:
-#             logger.debug(f"File uploaded: {f.filename} (size: {f.content_length} bytes)")
-#         else:
-#             logger.debug("Empty file upload detected")
-    
-#     """I will come back to file handling later"""
-
-#     # 1. Find or create latest conversation
-#     conversation = Conversation.query.filter_by(user_id=current_user.id)\
-#         .order_by(Conversation.id.desc()).first()
-#     if not conversation:
-#         conversation = Conversation(user_id=current_user.id)
-#         db.session.add(conversation)
-#         db.session.commit()
-#         logger.info(f"Created new conversation for user {current_user.id} (conversation ID: {conversation.id})")
-#     else:
-#         logger.debug(f"Using existing conversation ID: {conversation.id}")
-
-#     # 2. Save user message
-#     user_msg = Message(conversation_id=conversation.id, sender="user", text=user_message)
-#     db.session.add(user_msg)
-#     logger.debug(f"Saved user message to conversation {conversation.id}")
-
-#     # 3. Gather context (last N messages, e.g., 10)
-#     history = Message.query.filter_by(conversation_id=conversation.id)\
-#         .order_by(Message.timestamp.asc()).all()
-#     messages = [{"role": m.sender, "content": m.text} for m in history]
-#     messages.append({"role": "user", "content": user_message})
-    
-#     logger.debug(f"Gathered {len(history)} previous messages for context")
-
-#     # 4. Call LLM
-#     bot_reply = call_llm(messages)
-
-#     # 5. Save bot reply
-#     bot_msg = Message(conversation_id=conversation.id, sender="bot", text=bot_reply)
-#     db.session.add(bot_msg)
-#     db.session.commit()
-    
-#     logger.info(f"Chat completed successfully for user {current_user.id}. Bot reply length: {len(bot_reply)} characters")
-
-#     return jsonify({"reply": bot_reply}), 200
 
 @chat_bp.route("/chat", methods=["POST"])
 @login_required

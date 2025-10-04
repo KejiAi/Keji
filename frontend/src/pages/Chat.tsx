@@ -23,14 +23,14 @@ interface BackendResponse {
   role: "assistant";
   content?: string;
   title?: string;
-  health?: string;
+  health?: Array<{ label: string; description: string }>;
   reply?: string; // For backward compatibility
 }
 
 interface Recommendation {
   title: string;
   content: string;
-  health?: string;
+  health?: Array<{ label: string; description: string }>;
 }
 
 const Chat = () => {
@@ -86,9 +86,21 @@ const Chat = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
   };
 
+  // Auto-scroll to bottom when messages change
   useEffect(() => {
-    scrollToBottom();
-  }, [messages]);
+    if (!recommendation) {
+      scrollToBottom();
+    }
+  }, [messages, recommendation]);
+
+  // Scroll to bottom on initial load
+  useEffect(() => {
+    if (messages.length > 0) {
+      setTimeout(() => {
+        messagesEndRef.current?.scrollIntoView({ behavior: "auto" });
+      }, 100);
+    }
+  }, []);
 
   // Auto-resize textarea based on content
   useEffect(() => {
@@ -97,36 +109,34 @@ const Chat = () => {
 
     const adjustHeight = () => {
       textarea.style.height = "auto";
-      const scrollHeight = textarea.scrollHeight;
-      const lineHeight = 24; // Approximate line height
-      const minHeight = 48; // 2 lines
-      const maxHeight = 120; // 5 lines max before scrolling
-      
-      let lines = Math.floor(scrollHeight / lineHeight);
-      lines = Math.max(2, lines); // Minimum 2 lines
-      
-      let newHeight = minHeight;
+
+      const lineHeight = 16; // Tailwind text-base = 16px
+      const minHeight = 12;  // placeholder only
+      const maxLines = 5;
+      const maxHeight = lineHeight * maxLines;
+
+      let scrollHeight = textarea.scrollHeight;
+      let lines = Math.ceil(scrollHeight / lineHeight);
+
+      lines = Math.max(1, lines);
+
+      let newHeight = Math.min(Math.max(lines * lineHeight, minHeight), maxHeight);
+
       let newBorderRadius = 24;
-      
-      if (lines <= 2) {
-        newHeight = minHeight;
-        newBorderRadius = 24;
-      } else if (lines === 3) {
-        newHeight = 72;
-        newBorderRadius = 18;
-      } else if (lines === 4) {
-        newHeight = 96;
-        newBorderRadius = 12;
-      } else {
-        newHeight = maxHeight;
+
+      if (lines === 1) newBorderRadius = 24;
+      else if (lines === 2) newBorderRadius = 20;
+      else if (lines === 3) newBorderRadius = 16;
+      else if (lines === 4) newBorderRadius = 12;
+      else {
         newBorderRadius = 8;
         textarea.style.overflowY = "auto";
       }
-      
-      if (lines < 5) {
+
+      if (lines < maxLines) {
         textarea.style.overflowY = "hidden";
       }
-      
+
       setTextareaHeight(newHeight);
       setBorderRadius(newBorderRadius);
       textarea.style.height = `${newHeight}px`;
@@ -134,6 +144,7 @@ const Chat = () => {
 
     adjustHeight();
   }, [inputMessage]);
+
 
   const sendMessage = useCallback(async (messageText: string, files?: File[]) => {
     if (!messageText.trim() && !files?.length) return;
@@ -273,33 +284,47 @@ const Chat = () => {
       <SEO title="Chat — Keji AI" description="Chat with your AI food assistant" />
 
       <div className="flex flex-col h-screen bg-background">
-        {/* Header */}
-        <header className="p-2 mt-6">
-          <Button
-            variant="ghost"
-            onClick={() => navigate("/homepage")}
-            className="mr-4 p-2"
-          >
-            <svg
-              xmlns="http://www.w3.org/2000/svg"
-              style={{ width: 24, height: 24 }}
-              viewBox="0 0 24 24"
-              fill="none"
-              stroke="black"
-              strokeWidth={2}
-              strokeLinecap="round"
-              strokeLinejoin="round"
-            >
-              <path d="M15 5 L7 12 L15 19" />
-              <line x1="7" y1="12" x2="21" y2="12" />
-            </svg>
-          </Button>
-        </header>
+        {/* Recommendation section (when active) */}
+        {recommendation && (
+          <div className="flex-1 overflow-y-auto">
+            <RecommendationPopup
+              recommendation={recommendation}
+              onClose={handleRecommendationClose}
+              onAccept={handleRecommendationAccept}
+            />
+          </div>
+        )}
 
-        {/* Chat body (scrollable) */}
-        <div className="flex-1 overflow-y-auto overflow-x-hidden border-background_dark border-b rounded-b-3xl">
-          <div className="max-w-2xl mx-auto space-y-4 px-2 sm:px-0 pb-4">
-          {messages.map((message) => {
+        {/* Chat section (always visible) */}
+        {!recommendation && (
+          <>
+            {/* Header */}
+            <header className="p-2 mt-6">
+              <Button
+                variant="ghost"
+                onClick={() => navigate("/homepage")}
+                className="mr-4 p-2"
+              >
+                <svg
+                  xmlns="http://www.w3.org/2000/svg"
+                  style={{ width: 24, height: 24 }}
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="black"
+                  strokeWidth={2}
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                >
+                  <path d="M15 5 L7 12 L15 19" />
+                  <line x1="7" y1="12" x2="21" y2="12" />
+                </svg>
+              </Button>
+            </header>
+
+            {/* Chat body (scrollable) */}
+            <div className="flex-1 overflow-y-auto overflow-x-hidden border-background_dark border-b rounded-b-3xl">
+              <div className="max-w-2xl mx-auto space-y-4 px-2 sm:px-0 pb-4">
+              {messages.map((message) => {
             const isUser = message.sender === "user";
             return (
               <div
@@ -381,12 +406,14 @@ const Chat = () => {
                 </div>
               </div>
             )}
-            <div ref={messagesEndRef} />
-          </div>
-        </div>
+                <div ref={messagesEndRef} />
+              </div>
+            </div>
+          </>
+        )}
 
-        {/* Input section (sticky bottom, responsive) */}
-        <div className="flex-shrink-0 sticky bottom-0">
+        {/* Input section (sticky bottom, always visible) */}
+        <div className={`flex-shrink-0 sticky bottom-0 bg-background transition-opacity ${recommendation ? 'opacity-50 pointer-events-none' : 'opacity-100'}`}>
           <div className="max-w-2xl mx-auto py-2">
             {/* File preview section */}
             {selectedFiles.length > 0 && (
@@ -438,17 +465,18 @@ const Chat = () => {
               />
 
               <div 
-                className="flex items-end p-2 bg-background-light border border-background_dark shadow-base flex-1 rounded-3xl transition-all duration-200"
-                style={textareaHeight > 48 ? { 
+                className="flex items-end p-2 bg-background-light border border-background_dark/50 shadow-base rounded-3xl transition-all duration-200"
+                style={{ 
                   borderRadius: `${borderRadius}px`,
-                  minHeight: `${textareaHeight + 16}px`
-                } : {}}
+                  minHeight: `${textareaHeight + 12}px`
+                }}
               >
                 <Button
                   variant="ghost"
                   size="icon"
                   onClick={handleFileSelect}
-                  className="h-9 w-9 flex-shrink-0 mb-1"
+                  className="h-9 w-9 flex-shrink-0"
+                  disabled={!!recommendation}
                 >
                   <img
                     src="assets/All Icon Used/ic_round-plus.png"
@@ -461,28 +489,22 @@ const Chat = () => {
                   ref={inputRef}
                   value={inputMessage}
                   onChange={(e) => setInputMessage(e.target.value)}
-                  placeholder="What can I eat this morning?"
-                  className="flex-1 bg-transparent border-0 ring-0 outline-none focus:border-0 focus:ring-0 text-base placeholder:text-muted-foreground placeholder:text-md px-2 py-3 resize-none min-h-[48px]"
+                  placeholder="What can I eat this morn?"
+                  className="flex-1 bg-transparent border-0 ring-0 outline-none focus:border-0 focus:ring-0 text-base placeholder:text-muted-foreground placeholder:text-sm px-2 py-2 resize-none min-h-[10px] leading-[1.2]"
+                  disabled={!!recommendation}
                   onKeyDown={(e) => {
-                    // On mobile, Enter creates new line, Ctrl+Enter or Cmd+Enter sends message
-                    // On desktop, Enter sends message, Shift+Enter creates new line
                     const isMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
-                    
                     if (e.key === "Enter") {
                       if (isMobile) {
-                        // On mobile: Enter = new line, Ctrl+Enter = send
                         if (e.ctrlKey || e.metaKey) {
                           e.preventDefault();
                           handleSendMessage();
                         }
-                        // Otherwise, let Enter create a new line naturally
                       } else {
-                        // On desktop: Enter = send (unless Shift is held)
                         if (!e.shiftKey) {
                           e.preventDefault();
                           handleSendMessage();
                         }
-                        // Shift+Enter creates new line naturally
                       }
                     }
                   }}
@@ -492,11 +514,12 @@ const Chat = () => {
                 <Button
                   variant="ghost"
                   size="icon"
-                  className="h-10 w-10 rounded-full flex-shrink-0 mb-1"
+                  className="h-10 w-10 rounded-full flex-shrink-0"
                   onClick={handleSendMessage}
                   disabled={
                     loading ||
-                    (!inputMessage.trim() && selectedFiles.length === 0)
+                    (!inputMessage.trim() && selectedFiles.length === 0) ||
+                    !!recommendation
                   }
                 >
                   <img
@@ -512,6 +535,7 @@ const Chat = () => {
                 variant="ghost"
                 size="icon"
                 className="rounded-full p-0 hover:opacity-80 transition h-12 w-12"
+                disabled={!!recommendation}
               >
                 <img
                   src="assets/All Icon Used/mic icon.png"
@@ -524,13 +548,6 @@ const Chat = () => {
           </div>
         </div>
       </div>
-
-      {/* Recommendation Popup */}
-      <RecommendationPopup
-        recommendation={recommendation}
-        onClose={handleRecommendationClose}
-        onAccept={handleRecommendationAccept}
-      />
     </PageContainer>
   );
 };

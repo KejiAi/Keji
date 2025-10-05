@@ -284,22 +284,8 @@ const Chat = () => {
       <SEO title="Chat — Keji AI" description="Chat with your AI food assistant" />
 
       <div className="flex flex-col h-screen bg-background">
-        {/* Recommendation section (when active) */}
-        {recommendation && (
-          <div className="flex-1 overflow-y-auto">
-            <RecommendationPopup
-              recommendation={recommendation}
-              onClose={handleRecommendationClose}
-              onAccept={handleRecommendationAccept}
-            />
-          </div>
-        )}
-
-        {/* Chat section (always visible) */}
-        {!recommendation && (
-          <>
-            {/* Header */}
-            <header className="p-2 mt-6">
+        {/* Header */}
+        <header className="p-2 mt-6">
               <Button
                 variant="ghost"
                 onClick={() => navigate("/homepage")}
@@ -409,11 +395,9 @@ const Chat = () => {
                 <div ref={messagesEndRef} />
               </div>
             </div>
-          </>
-        )}
 
         {/* Input section (sticky bottom, always visible) */}
-        <div className={`flex-shrink-0 sticky bottom-0 bg-background transition-opacity ${recommendation ? 'opacity-50 pointer-events-none' : 'opacity-100'}`}>
+        <div className="flex-shrink-0 sticky bottom-0 bg-background">
           <div className="w-full px-2 py-2">
             {/* File preview section */}
             {selectedFiles.length > 0 && (
@@ -476,7 +460,6 @@ const Chat = () => {
                   size="icon"
                   onClick={handleFileSelect}
                   className="h-9 w-9 flex-shrink-0"
-                  disabled={!!recommendation}
                 >
                   <img
                     src="assets/All Icon Used/ic_round-plus.png"
@@ -491,7 +474,6 @@ const Chat = () => {
                   onChange={(e) => setInputMessage(e.target.value)}
                   placeholder="What can I eat this morn?"
                   className="flex-1 bg-transparent border-0 ring-0 outline-none focus:border-0 focus:ring-0 text-base placeholder:text-muted-foreground placeholder:text-sm px-2 py-2 resize-none min-h-[10px] leading-[1.2]"
-                  disabled={!!recommendation}
                   onKeyDown={(e) => {
                     const isMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
                     if (e.key === "Enter") {
@@ -518,8 +500,7 @@ const Chat = () => {
                   onClick={handleSendMessage}
                   disabled={
                     loading ||
-                    (!inputMessage.trim() && selectedFiles.length === 0) ||
-                    !!recommendation
+                    (!inputMessage.trim() && selectedFiles.length === 0)
                   }
                 >
                   <img
@@ -535,7 +516,6 @@ const Chat = () => {
                 variant="ghost"
                 size="icon"
                 className="rounded-full p-0 hover:opacity-80 transition h-12 w-12 flex-shrink-0"
-                disabled={!!recommendation}
               >
                 <img
                   src="assets/All Icon Used/mic icon.png"
@@ -547,6 +527,15 @@ const Chat = () => {
             </div>
           </div>
         </div>
+
+        {/* Recommendation Popup (overlay) */}
+        {recommendation && (
+          <RecommendationPopup
+            recommendation={recommendation}
+            onClose={handleRecommendationClose}
+            onAccept={handleRecommendationAccept}
+          />
+        )}
       </div>
     </PageContainer>
   );

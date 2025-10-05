@@ -9,6 +9,8 @@ interface User {
   fname: string;
   email: string;
   initial: string;
+  time?: string;
+  greet?: string;
 }
 
 interface SessionContextType {

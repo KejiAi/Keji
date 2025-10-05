@@ -206,11 +206,13 @@ const Homepage = () => {
         </header>
 
         {/* Main greeting */}
-        <div className="mb-10 md:mb-12 mt-14">
-          <h2 className="text-4xl md:text-5xl font-funnelDisplay font-bold leading-tight text-left">
-            <span className="text-primary">Hi {user.fname},</span>
+        <div className="mb-10 md:mb-12 mt-12">
+          <h2 className="text-3xl md:text-5xl font-funnelDisplay font-bold leading-tight text-left">
+            <span className="text-primary">
+              {user.greet ? user.greet : user.time ? `${user.time} ${user.fname}` : `Hi ${user.fname}`},
+            </span>
             <br />
-            <span className="text-foreground">How can I help you today?</span>
+            <span>How can I help you today?</span>
           </h2>
         </div>
 

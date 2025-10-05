@@ -72,20 +72,20 @@ const RecommendationPopup = ({ recommendation, onClose, onAccept }: Recommendati
   };
 
   return (
-    <div className="relative flex flex-col h-full bg-background overflow-x-hidden">
-      {/* Backdrop overlay for cancellation */}
+    <>
+      {/* Main backdrop */}
       <div 
-        className="absolute inset-0 z-10 bg-transparent"
+        className="fixed inset-0 z-30 bg-black/50"
         onClick={handleBackdropClick}
       />
 
       {/* Recommendation Card Container */}
       <div 
-        className={`relative z-20 flex flex-col justify-start items-center pt-16 px-2 transition-transform duration-300 ${
-          showHealthModal ? 'translate-x-[88%] pointer-events-none' : 'translate-x-0'
+        className={`fixed inset-0 z-50 flex flex-col justify-start items-center pt-16 px-2 transition-transform duration-300 pointer-events-none ${
+          showHealthModal ? 'translate-x-[86%]' : 'translate-x-0'
         }`}
       >
-        <div className="w-full max-w-md mx-auto">
+        <div className="w-full max-w-md mx-auto pointer-events-auto">
           {/* Card */}
           <div className="relative bg-muted rounded-2xl shadow-sm p-4" onClick={(e) => e.stopPropagation()}>
             {/* Top Section */}
@@ -139,55 +139,13 @@ const RecommendationPopup = ({ recommendation, onClose, onAccept }: Recommendati
 
       </div>
 
-      {/* Chat Bubbles Below Recommendation */}
-      <div className="w-full max-w-md mx-auto space-y-4 mt-6 px-2">
-        {/* User message */}
-        <div className="flex flex-col items-end">
-          <div className="flex flex-col items-end max-w-[75%]">
-            <div className="px-3 py-1 rounded-[0.8rem] bg-ingredient-green text-ingredient-green-foreground rounded-br-none">
-              <p className="text-sm sm:text-base break-words whitespace-pre-wrap leading-relaxed">
-                Thanks, I'm eating this
-              </p>
-            </div>
-            <div className="text-[10px] text-gray-400 mt-1 text-right">
-              10:37
-            </div>
-          </div>
-        </div>
-
-        {/* AI message */}
-        <div className="flex flex-col items-start">
-          <div className="flex w-full max-w-[75%] gap-2">
-            {/* Avatar/logo */}
-            <div className="w-7 h-7 flex-shrink-0 bg-white rounded-full overflow-hidden flex items-center justify-center">
-              <img
-                src="/assets/Asset 1@2x.png"
-                alt="logo"
-                className="w-3 h-3 object-cover"
-              />
-            </div>
-
-            {/* Bubble + timestamp */}
-            <div className="flex flex-col items-start max-w-full">
-              <div className="px-3 py-1 rounded-[0.8rem] bg-white text-foreground rounded-bl-none">
-                <p className="text-sm sm:text-base break-words whitespace-pre-wrap leading-relaxed">
-                  Anytime, man. I gatch you.
-                </p>
-              </div>
-              <div className="text-[10px] text-gray-400 mt-1 text-left">
-                10:37
-              </div>
-            </div>
-          </div>
-        </div>
-      </div>
 
       {/* Health Modal */}
       {isHealthModalVisible && recommendation.health && (
-        <div className="absolute inset-0 z-10 flex justify-center items-start pt-16 px-2">
-          <div className="w-full max-w-md mx-auto">
+        <div className="fixed inset-0 z-40 flex justify-center items-start pt-16 px-2 pointer-events-none">
+          <div className="w-full max-w-md mx-auto pointer-events-auto">
             {/* Modal */}
-            <div className="relative bg-background px-4 pb-4" onClick={(e) => e.stopPropagation()}>
+            <div className="relative bg-background px-4 pb-4 rounded-2xl pt-4" onClick={(e) => e.stopPropagation()}>
               {/* Health Icon at top left */}
               <button
                 onClick={handleCloseHealthModal}
@@ -201,11 +159,11 @@ const RecommendationPopup = ({ recommendation, onClose, onAccept }: Recommendati
               </button>
 
               {/* Top Section */}
-              <div className="pt-4 max-w-[85%] min-h-[21rem]">
+              <div className="pt-4 max-w-[85%] h-[20rem]">
                 <h2 className="text-3xl font-normal text-black mb-3 leading-none">
                   {recommendation.title}
                 </h2>
-                <div className="space-y-3 text-gray-500 text-base leading-snug pr-2">
+                <div className="space-y-3 text-gray-500 text-base leading-tight pr-2">
                   {recommendation.health?.map((paragraph, index) => (
                     <div key={index}>
                       <span className="font-bold">{paragraph.label}:</span>{" "}
@@ -218,7 +176,7 @@ const RecommendationPopup = ({ recommendation, onClose, onAccept }: Recommendati
           </div>
         </div>
       )}
-    </div>
+    </>
   );
 };
 

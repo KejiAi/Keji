@@ -19,6 +19,29 @@ logger = logging.getLogger(__name__)
 auth_bp = Blueprint("auth", __name__)
 serializer = URLSafeTimedSerializer(os.getenv('SECRET_KEY'))
 
+def get_greeting():
+    hour = datetime.now().hour
+    night_lines = [
+        "Night crawler 😎, still up, ehn?",
+        "Night crawler mode ON.🦉",
+        "Who is awake by this time? Night crawler 😁",
+        "Night crawler vibes 😆, Oya now",
+        "🛌 Go sleep jare, night crawler 😂",
+        "Kerosene 😂, you no see sleep",
+        "Young John 😜"
+    ]
+
+    if 5 <= hour < 12:
+        return "☀️ Good morning!"
+    elif 12 <= hour < 16:
+        return "🌞 Good afternoon!"
+    elif 16 <= hour < 21:
+        return "🌇 Good evening!"
+    else:
+        return {"greet":random.choice(night_lines)}
+
+
+
 # ✅ SIGN-UP (with verification code + link)
 @auth_bp.route("/sign-up", methods=["POST"])
 def signup():
@@ -298,6 +321,8 @@ def check_session():
     if current_user.is_authenticated:
         initial = current_user.name.split()[0][0] if current_user.name else ""
         fname = current_user.name.split()[0] if current_user.name else ""
+        time_of_day = get_greeting()
+
         user_data = {
             "loggedIn": True,
             "id": current_user.id,
@@ -306,6 +331,12 @@ def check_session():
             "email": current_user.email,
             "initial": initial
         }
+
+        if type(time_of_day) == dict:
+            user_data.update({"greet": time_of_day.get("greet")})
+        else:
+            user_data.update({"time": time_of_day})
+
         logger.debug(f"Session check successful for user: {current_user.name}")
         return jsonify(user_data), 200
     

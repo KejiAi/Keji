@@ -32,13 +32,13 @@ def get_greeting():
     ]
 
     if 5 <= hour < 12:
-        return "☀️ Good morning!"
+        return "morning"
     elif 12 <= hour < 16:
-        return "🌞 Good afternoon!"
-    elif 16 <= hour < 21:
-        return "🌇 Good evening!"
+        return "afternoon"
+    elif 16 <= hour < 22:
+        return "evening"
     else:
-        return {"greet":random.choice(night_lines)}
+        return {"greet": random.choice(night_lines)}
 
 
 
@@ -349,7 +349,7 @@ EXPIRATION_HOURS = 24
 
 def delete_expired_unverified_users():
     logger.info("Starting cleanup of expired unverified users")
-    expiry_time = datetime.utcnow() - timedelta(hours=EXPIRATION_HOURS)
+    expiry_time = datetime.now() - timedelta(hours=EXPIRATION_HOURS)
     expired_users = User.query.filter(
         User.is_verified == False,
         User.created_at < expiry_time

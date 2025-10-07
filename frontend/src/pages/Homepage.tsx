@@ -207,12 +207,32 @@ const Homepage = () => {
 
         {/* Main greeting */}
         <div className="mb-10 md:mb-12 mt-12">
-          <h2 className="text-3xl md:text-5xl font-funnelDisplay font-bold leading-tight text-left">
-            <span className="text-primary">
-              {user.greet ? user.greet : user.time ? `${user.time} ${user.fname}` : `Hi ${user.fname}`},
+          <h2 className="font-funnelDisplay leading-none text-left">
+            <span className="inline-flex items-center gap-2 flex-wrap">
+              {user.greet ? (
+                <span className="text-primary text-2xl md:text-4xl font-bold">{user.greet}</span>
+              ) : user.time ? (
+                <>
+                  <span className="text-gray-400 text-xl md:text-2xl font-normal">Good {user.time}</span>{" "}
+                  <img 
+                    src={
+                      user.time === "morning" 
+                        ? "assets/All Icon Used/vaadin_morning.svg"
+                        : user.time === "afternoon"
+                        ? "assets/All Icon Used/mingcute_sun-fill.svg"
+                        : "assets/All Icon Used/material-symbols-light_clear-night.svg"
+                    }
+                    alt={user.time}
+                    className="h-6 w-6 md:h-8 md:w-8 inline"
+                  />{" "}
+                  <span className="text-primary text-3xl md:text-4xl font-extrabold">{user.fname},</span>
+                </>
+              ) : (
+                <span className="text-primary text-3xl md:text-4xl font-bold">Hi {user.fname},</span>
+              )}
             </span>
             <br />
-            <span>How can I help you today?</span>
+            <span className="text-brand-deep text-[2.5rem] md:text-5xl font-extrabold">How can I help you today?</span>
           </h2>
         </div>
 

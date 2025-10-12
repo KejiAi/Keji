@@ -32,6 +32,9 @@ class Conversation(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     user_id = db.Column(db.Integer, db.ForeignKey("user.id"), nullable=False)
     created_at = db.Column(db.DateTime, default=datetime.now())
+    memory_summary = db.Column(db.Text, nullable=True)  # Compressed summary of older messages
+    pruned_count = db.Column(db.Integer, default=0)  # Number of messages that have been summarized
+    last_summary_at = db.Column(db.DateTime, nullable=True)  # When summary was last updated
 
     messages = db.relationship("Message", backref="conversation", lazy=True)
 

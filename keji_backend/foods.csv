@@ -1,0 +1,104 @@
+Category,Food,Price,Description
+Restaurant Foods:,Jollof Rice,350,Per Spoon
+Restaurant Foods:,Fried Rice,350,Per Spoon
+Restaurant Foods:,Shawa Fish,350,Per one
+Restaurant Foods:,Ponmo,350,Per one
+Restaurant Foods:,Moimoi,350,Per one
+Restaurant Foods:,Semo,350,Per one wrap
+Restaurant Foods:,Amala,350,Per one wrap
+Restaurant Foods:,Eba,350,Per one wrap
+Restaurant Foods:,Chicken,1300,up to #1500 / #3000
+Restaurant Foods:,Hake fish,1500,up to #2500 / #3000
+Restaurant Foods:,White Rice and Beans,400,Per one
+Restaurant Foods:,Yam,300,per one Slice
+Restaurant Foods:,Yam Egg Sauce,500,per spoon
+Restaurant Foods:,Yam Pottage (Asaro),500,per spoon
+Restaurant Foods:,Ofada Rice and Sauce,1100,
+Iya Buka Foods:,1 spoon of Rice,250,
+Iya Buka Foods:,1 spoon of Beans,250,
+Iya Buka Foods:,1 spoon of Spag,200,
+Iya Buka Foods:,1 wrap of Moin moin,200,
+Iya Buka Foods:,1 Wrap of Semo,200,
+Iya Buka Foods:,1 wrap of Amala,200,
+Iya Buka Foods:,1 wrap of Eba,200,
+Iya Buka Foods:,1 wrap of Fufu,200,
+Iya Buka Foods:,Ponmo,200,upto #500 depending on size
+Iya Buka Foods:,Beef,300,
+Iya Buka Foods:,Yam,200,
+Iya Buka Foods:,Fish,300,upto #800 depending on size
+Snacks and Chops:,Reguslar Toast,600,
+Snacks and Chops:,Chicken Toast,900,
+Snacks and Chops:,Fish-Filling Toast,900,
+Snacks and Chops:,Pancakes,250,
+Snacks and Chops:,Doughnut,500,
+Snacks and Chops:,Sausage Roll,500,
+Snacks and Chops:,Hotdog,500,
+Snacks and Chops:,Meat Pie,900,
+Snacks and Chops:,Chicken Pie,800,
+Snacks and Chops:,Burger,2000,
+Snacks and Chops:,Burger with Cheese,2800,
+Snacks and Chops:,Pepper Chicken,2800,
+Snacks and Chops:,Chicken & Chips (Big),4000,
+Snacks and Chops:,Chicken & Chips (Small),2100,
+Snacks and Chops:,Chips + Ketchup,1500,
+Snacks and Chops:,Shawarma (Regular),1900,
+Snacks and Chops:,Shawarma (Chicken & Bear),2250,
+Snacks and Chops:,Shawarma (Double Chicken),2900,
+Snacks and Chops:,Sharwama Special,3600,
+Snacks and Chops:,Pizza (Small),8000,
+Snacks and Chops:,Pizza (Medium),9000,
+Snacks and Chops:,Pizza (Big),10000,
+Drinks & Minerals:,Coffee,550,
+Drinks & Minerals:,Coke,500,
+Drinks & Minerals:,Fanta,500,
+Drinks & Minerals:,Spirit,500,
+Drinks & Minerals:,C-way Juice,650,
+Drinks & Minerals:,Fearless,500,
+Drinks & Minerals:,Malt,600,
+Drinks & Minerals:,Table Water,250,
+Drinks & Minerals:,Sachet Water,50,"per one, 3 sachets for #100"
+Drinks & Minerals:,Sosa (Big),1200,
+Drinks & Minerals:,Sosa (Small),500,
+Drinks & Minerals:,Milkshake (Big),1500,
+Drinks & Minerals:,Milkshake (Small),750,
+Drinks & Minerals:,Bullet (Blue),1400,
+Drinks & Minerals:,Yoghurt Parfait,3000,
+Drinks & Minerals:,"Freshyo, Nutri-milk, Viju Milk,",800,#900 and #1000 for others respectively
+Drinks & Minerals:,Zobo,250,
+Drinks & Minerals:,Tigernut drink,700,
+Fruits:,Watermelon,500,per slice
+Fruits:,Cucumber,500,
+Fruits:,Banana,500,upto #2000 depending on size
+Fruits:,Plantain,800,per one
+Fruits:,Pineapple,400,"per slice, #2000 for a whole"
+Fruits:,Apple,400,
+Fruits:,Orange,500,"for 3 oranges, depending on the size"
+Fruits:,Carrot,500,small
+Fruits:,Cooked Groundut,200,per cup
+Fruits:,Groundnut,100,
+Fruits:,Lemon,700,
+Fruits:,Tiger nut,500,per cut
+Fruits:,Coconut,1000,
+"Food Items (from the market, not restaurant):",Potato,300,
+"Food Items (from the market, not restaurant):",Tomato,500,(4 tomatoes)
+"Food Items (from the market, not restaurant):",Onion,100,or #200 or #500 depending on size
+"Food Items (from the market, not restaurant):",Semovita,1000,for (500g) or #1800 (1kg)
+"Food Items (from the market, not restaurant):",Groundnut Oil (1 litre),2500,
+"Food Items (from the market, not restaurant):",Sachet groundnut oil,300,
+"Food Items (from the market, not restaurant):",Sardine,1200,
+"Food Items (from the market, not restaurant):",Egusi,400,
+"Food Items (from the market, not restaurant):",Tomato Paste (Sachet),200,or #250
+"Food Items (from the market, not restaurant):",Spaghetti,1200,
+"Food Items (from the market, not restaurant):",Egg,250,"per one, #600 per crate"
+"Food Items (from the market, not restaurant):",1 cup of Rice:,300,
+"Food Items (from the market, not restaurant):",1 cup of beans`,300,
+"Food Items (from the market, not restaurant):",Salt,150,
+"Food Items (from the market, not restaurant):",1 log of Yam,2000,
+Other Foodstuffs:,Peanut,100,
+Other Foodstuffs:,Busicuit,100,up to #500
+Other Foodstuffs:,Millo,300,
+Other Foodstuffs:,Can Milk,800,
+Other Foodstuffs:,Gala,200,
+Other Foodstuffs:,Tomtom,50,
+Other Foodstuffs:,Sweets,100,up to #1000
+Other Foodstuffs:,Chocolates,200,up to #1800

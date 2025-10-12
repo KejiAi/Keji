@@ -1,0 +1,620 @@
+[
+    {
+        "Category": "Restaurant Foods:",
+        "Food": "Jollof Rice",
+        "Price": 350,
+        "Description": "Per Spoon"
+    },
+    {
+        "Category": "Restaurant Foods:",
+        "Food": "Fried Rice",
+        "Price": 350,
+        "Description": "Per Spoon"
+    },
+    {
+        "Category": "Restaurant Foods:",
+        "Food": "Shawa Fish",
+        "Price": 350,
+        "Description": "Per one"
+    },
+    {
+        "Category": "Restaurant Foods:",
+        "Food": "Ponmo",
+        "Price": 350,
+        "Description": "Per one"
+    },
+    {
+        "Category": "Restaurant Foods:",
+        "Food": "Moimoi",
+        "Price": 350,
+        "Description": "Per one"
+    },
+    {
+        "Category": "Restaurant Foods:",
+        "Food": "Semo",
+        "Price": 350,
+        "Description": "Per one wrap"
+    },
+    {
+        "Category": "Restaurant Foods:",
+        "Food": "Amala",
+        "Price": 350,
+        "Description": "Per one wrap"
+    },
+    {
+        "Category": "Restaurant Foods:",
+        "Food": "Eba",
+        "Price": 350,
+        "Description": "Per one wrap"
+    },
+    {
+        "Category": "Restaurant Foods:",
+        "Food": "Chicken",
+        "Price": 1300,
+        "Description": "up to #1500 / #3000"
+    },
+    {
+        "Category": "Restaurant Foods:",
+        "Food": "Hake fish",
+        "Price": 1500,
+        "Description": "up to #2500 / #3000"
+    },
+    {
+        "Category": "Restaurant Foods:",
+        "Food": "White Rice and Beans",
+        "Price": 400,
+        "Description": "Per one"
+    },
+    {
+        "Category": "Restaurant Foods:",
+        "Food": "Yam",
+        "Price": 300,
+        "Description": "per one Slice"
+    },
+    {
+        "Category": "Restaurant Foods:",
+        "Food": "Yam Egg Sauce",
+        "Price": 500,
+        "Description": "per spoon"
+    },
+    {
+        "Category": "Restaurant Foods:",
+        "Food": "Yam Pottage (Asaro)",
+        "Price": 500,
+        "Description": "per spoon"
+    },
+    {
+        "Category": "Restaurant Foods:",
+        "Food": "Ofada Rice and Sauce",
+        "Price": 1100,
+        "Description": ""
+    },
+    {
+        "Category": "Iya Buka Foods:",
+        "Food": "1 spoon of Rice",
+        "Price": 250,
+        "Description": ""
+    },
+    {
+        "Category": "Iya Buka Foods:",
+        "Food": "1 spoon of Beans",
+        "Price": 250,
+        "Description": ""
+    },
+    {
+        "Category": "Iya Buka Foods:",
+        "Food": "1 spoon of Spag",
+        "Price": 200,
+        "Description": ""
+    },
+    {
+        "Category": "Iya Buka Foods:",
+        "Food": "1 wrap of Moin moin",
+        "Price": 200,
+        "Description": ""
+    },
+    {
+        "Category": "Iya Buka Foods:",
+        "Food": "1 Wrap of Semo",
+        "Price": 200,
+        "Description": ""
+    },
+    {
+        "Category": "Iya Buka Foods:",
+        "Food": "1 wrap of Amala",
+        "Price": 200,
+        "Description": ""
+    },
+    {
+        "Category": "Iya Buka Foods:",
+        "Food": "1 wrap of Eba",
+        "Price": 200,
+        "Description": ""
+    },
+    {
+        "Category": "Iya Buka Foods:",
+        "Food": "1 wrap of Fufu",
+        "Price": 200,
+        "Description": ""
+    },
+    {
+        "Category": "Iya Buka Foods:",
+        "Food": "Ponmo",
+        "Price": 200,
+        "Description": "upto #500 depending on size"
+    },
+    {
+        "Category": "Iya Buka Foods:",
+        "Food": "Beef",
+        "Price": 300,
+        "Description": ""
+    },
+    {
+        "Category": "Iya Buka Foods:",
+        "Food": "Yam",
+        "Price": 200,
+        "Description": ""
+    },
+    {
+        "Category": "Iya Buka Foods:",
+        "Food": "Fish",
+        "Price": 300,
+        "Description": "upto #800 depending on size"
+    },
+    {
+        "Category": "Snacks and Chops:",
+        "Food": "Reguslar Toast",
+        "Price": 600,
+        "Description": ""
+    },
+    {
+        "Category": "Snacks and Chops:",
+        "Food": "Chicken Toast",
+        "Price": 900,
+        "Description": ""
+    },
+    {
+        "Category": "Snacks and Chops:",
+        "Food": "Fish-Filling Toast",
+        "Price": 900,
+        "Description": ""
+    },
+    {
+        "Category": "Snacks and Chops:",
+        "Food": "Pancakes",
+        "Price": 250,
+        "Description": ""
+    },
+    {
+        "Category": "Snacks and Chops:",
+        "Food": "Doughnut",
+        "Price": 500,
+        "Description": ""
+    },
+    {
+        "Category": "Snacks and Chops:",
+        "Food": "Sausage Roll",
+        "Price": 500,
+        "Description": ""
+    },
+    {
+        "Category": "Snacks and Chops:",
+        "Food": "Hotdog",
+        "Price": 500,
+        "Description": ""
+    },
+    {
+        "Category": "Snacks and Chops:",
+        "Food": "Meat Pie",
+        "Price": 900,
+        "Description": ""
+    },
+    {
+        "Category": "Snacks and Chops:",
+        "Food": "Chicken Pie",
+        "Price": 800,
+        "Description": ""
+    },
+    {
+        "Category": "Snacks and Chops:",
+        "Food": "Burger",
+        "Price": 2000,
+        "Description": ""
+    },
+    {
+        "Category": "Snacks and Chops:",
+        "Food": "Burger with Cheese",
+        "Price": 2800,
+        "Description": ""
+    },
+    {
+        "Category": "Snacks and Chops:",
+        "Food": "Pepper Chicken",
+        "Price": 2800,
+        "Description": ""
+    },
+    {
+        "Category": "Snacks and Chops:",
+        "Food": "Chicken & Chips (Big)",
+        "Price": 4000,
+        "Description": ""
+    },
+    {
+        "Category": "Snacks and Chops:",
+        "Food": "Chicken & Chips (Small)",
+        "Price": 2100,
+        "Description": ""
+    },
+    {
+        "Category": "Snacks and Chops:",
+        "Food": "Chips + Ketchup",
+        "Price": 1500,
+        "Description": ""
+    },
+    {
+        "Category": "Snacks and Chops:",
+        "Food": "Shawarma (Regular)",
+        "Price": 1900,
+        "Description": ""
+    },
+    {
+        "Category": "Snacks and Chops:",
+        "Food": "Shawarma (Chicken & Bear)",
+        "Price": 2250,
+        "Description": ""
+    },
+    {
+        "Category": "Snacks and Chops:",
+        "Food": "Shawarma (Double Chicken)",
+        "Price": 2900,
+        "Description": ""
+    },
+    {
+        "Category": "Snacks and Chops:",
+        "Food": "Sharwama Special",
+        "Price": 3600,
+        "Description": ""
+    },
+    {
+        "Category": "Snacks and Chops:",
+        "Food": "Pizza (Small)",
+        "Price": 8000,
+        "Description": ""
+    },
+    {
+        "Category": "Snacks and Chops:",
+        "Food": "Pizza (Medium)",
+        "Price": 9000,
+        "Description": ""
+    },
+    {
+        "Category": "Snacks and Chops:",
+        "Food": "Pizza (Big)",
+        "Price": 10000,
+        "Description": ""
+    },
+    {
+        "Category": "Drinks & Minerals:",
+        "Food": "Coffee",
+        "Price": 550,
+        "Description": ""
+    },
+    {
+        "Category": "Drinks & Minerals:",
+        "Food": "Coke",
+        "Price": 500,
+        "Description": ""
+    },
+    {
+        "Category": "Drinks & Minerals:",
+        "Food": "Fanta",
+        "Price": 500,
+        "Description": ""
+    },
+    {
+        "Category": "Drinks & Minerals:",
+        "Food": "Spirit",
+        "Price": 500,
+        "Description": ""
+    },
+    {
+        "Category": "Drinks & Minerals:",
+        "Food": "C-way Juice",
+        "Price": 650,
+        "Description": ""
+    },
+    {
+        "Category": "Drinks & Minerals:",
+        "Food": "Fearless",
+        "Price": 500,
+        "Description": ""
+    },
+    {
+        "Category": "Drinks & Minerals:",
+        "Food": "Malt",
+        "Price": 600,
+        "Description": ""
+    },
+    {
+        "Category": "Drinks & Minerals:",
+        "Food": "Table Water",
+        "Price": 250,
+        "Description": ""
+    },
+    {
+        "Category": "Drinks & Minerals:",
+        "Food": "Sachet Water",
+        "Price": 50,
+        "Description": "per one, 3 sachets for #100"
+    },
+    {
+        "Category": "Drinks & Minerals:",
+        "Food": "Sosa (Big)",
+        "Price": 1200,
+        "Description": ""
+    },
+    {
+        "Category": "Drinks & Minerals:",
+        "Food": "Sosa (Small)",
+        "Price": 500,
+        "Description": ""
+    },
+    {
+        "Category": "Drinks & Minerals:",
+        "Food": "Milkshake (Big)",
+        "Price": 1500,
+        "Description": ""
+    },
+    {
+        "Category": "Drinks & Minerals:",
+        "Food": "Milkshake (Small)",
+        "Price": 750,
+        "Description": ""
+    },
+    {
+        "Category": "Drinks & Minerals:",
+        "Food": "Bullet (Blue)",
+        "Price": 1400,
+        "Description": ""
+    },
+    {
+        "Category": "Drinks & Minerals:",
+        "Food": "Yoghurt Parfait",
+        "Price": 3000,
+        "Description": ""
+    },
+    {
+        "Category": "Drinks & Minerals:",
+        "Food": "Freshyo, Nutri-milk, Viju Milk,",
+        "Price": 800,
+        "Description": "#900 and #1000 for others respectively"
+    },
+    {
+        "Category": "Drinks & Minerals:",
+        "Food": "Zobo",
+        "Price": 250,
+        "Description": ""
+    },
+    {
+        "Category": "Drinks & Minerals:",
+        "Food": "Tigernut drink",
+        "Price": 700,
+        "Description": ""
+    },
+    {
+        "Category": "Fruits:",
+        "Food": "Watermelon",
+        "Price": 500,
+        "Description": "per slice"
+    },
+    {
+        "Category": "Fruits:",
+        "Food": "Cucumber",
+        "Price": 500,
+        "Description": ""
+    },
+    {
+        "Category": "Fruits:",
+        "Food": "Banana",
+        "Price": 500,
+        "Description": "upto #2000 depending on size"
+    },
+    {
+        "Category": "Fruits:",
+        "Food": "Plantain",
+        "Price": 800,
+        "Description": "per one"
+    },
+    {
+        "Category": "Fruits:",
+        "Food": "Pineapple",
+        "Price": 400,
+        "Description": "per slice, #2000 for a whole"
+    },
+    {
+        "Category": "Fruits:",
+        "Food": "Apple",
+        "Price": 400,
+        "Description": ""
+    },
+    {
+        "Category": "Fruits:",
+        "Food": "Orange",
+        "Price": 500,
+        "Description": "for 3 oranges, depending on the size"
+    },
+    {
+        "Category": "Fruits:",
+        "Food": "Carrot",
+        "Price": 500,
+        "Description": "small"
+    },
+    {
+        "Category": "Fruits:",
+        "Food": "Cooked Groundut",
+        "Price": 200,
+        "Description": "per cup"
+    },
+    {
+        "Category": "Fruits:",
+        "Food": "Groundnut",
+        "Price": 100,
+        "Description": ""
+    },
+    {
+        "Category": "Fruits:",
+        "Food": "Lemon",
+        "Price": 700,
+        "Description": ""
+    },
+    {
+        "Category": "Fruits:",
+        "Food": "Tiger nut",
+        "Price": 500,
+        "Description": "per cut"
+    },
+    {
+        "Category": "Fruits:",
+        "Food": "Coconut",
+        "Price": 1000,
+        "Description": ""
+    },
+    {
+        "Category": "Food Items (from the market, not restaurant):",
+        "Food": "Potato",
+        "Price": 300,
+        "Description": ""
+    },
+    {
+        "Category": "Food Items (from the market, not restaurant):",
+        "Food": "Tomato",
+        "Price": 500,
+        "Description": "(4 tomatoes)"
+    },
+    {
+        "Category": "Food Items (from the market, not restaurant):",
+        "Food": "Onion",
+        "Price": 100,
+        "Description": "or #200 or #500 depending on size"
+    },
+    {
+        "Category": "Food Items (from the market, not restaurant):",
+        "Food": "Semovita",
+        "Price": 1000,
+        "Description": "for (500g) or #1800 (1kg)"
+    },
+    {
+        "Category": "Food Items (from the market, not restaurant):",
+        "Food": "Groundnut Oil (1 litre)",
+        "Price": 2500,
+        "Description": ""
+    },
+    {
+        "Category": "Food Items (from the market, not restaurant):",
+        "Food": "Sachet groundnut oil",
+        "Price": 300,
+        "Description": ""
+    },
+    {
+        "Category": "Food Items (from the market, not restaurant):",
+        "Food": "Sardine",
+        "Price": 1200,
+        "Description": ""
+    },
+    {
+        "Category": "Food Items (from the market, not restaurant):",
+        "Food": "Egusi",
+        "Price": 400,
+        "Description": ""
+    },
+    {
+        "Category": "Food Items (from the market, not restaurant):",
+        "Food": "Tomato Paste (Sachet)",
+        "Price": 200,
+        "Description": "or #250"
+    },
+    {
+        "Category": "Food Items (from the market, not restaurant):",
+        "Food": "Spaghetti",
+        "Price": 1200,
+        "Description": ""
+    },
+    {
+        "Category": "Food Items (from the market, not restaurant):",
+        "Food": "Egg",
+        "Price": 250,
+        "Description": "per one, #600 per crate"
+    },
+    {
+        "Category": "Food Items (from the market, not restaurant):",
+        "Food": "1 cup of Rice:",
+        "Price": 300,
+        "Description": ""
+    },
+    {
+        "Category": "Food Items (from the market, not restaurant):",
+        "Food": "1 cup of beans`",
+        "Price": 300,
+        "Description": ""
+    },
+    {
+        "Category": "Food Items (from the market, not restaurant):",
+        "Food": "Salt",
+        "Price": 150,
+        "Description": ""
+    },
+    {
+        "Category": "Food Items (from the market, not restaurant):",
+        "Food": "1 log of Yam",
+        "Price": 2000,
+        "Description": ""
+    },
+    {
+        "Category": "Other Foodstuffs:",
+        "Food": "Peanut",
+        "Price": 100,
+        "Description": ""
+    },
+    {
+        "Category": "Other Foodstuffs:",
+        "Food": "Busicuit",
+        "Price": 100,
+        "Description": "up to #500"
+    },
+    {
+        "Category": "Other Foodstuffs:",
+        "Food": "Millo",
+        "Price": 300,
+        "Description": ""
+    },
+    {
+        "Category": "Other Foodstuffs:",
+        "Food": "Can Milk",
+        "Price": 800,
+        "Description": ""
+    },
+    {
+        "Category": "Other Foodstuffs:",
+        "Food": "Gala",
+        "Price": 200,
+        "Description": ""
+    },
+    {
+        "Category": "Other Foodstuffs:",
+        "Food": "Tomtom",
+        "Price": 50,
+        "Description": ""
+    },
+    {
+        "Category": "Other Foodstuffs:",
+        "Food": "Sweets",
+        "Price": 100,
+        "Description": "up to #1000"
+    },
+    {
+        "Category": "Other Foodstuffs:",
+        "Food": "Chocolates",
+        "Price": 200,
+        "Description": "up to #1800"
+    }
+]

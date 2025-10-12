@@ -6,6 +6,11 @@ import random
 import os
 import logging
 from werkzeug.utils import secure_filename
+from get_response import handle_user_input
+from context_manager import (
+    process_conversation_context,
+    get_full_history_for_frontend
+)
 
 # Create logger for this module
 logger = logging.getLogger(__name__)
@@ -14,94 +19,48 @@ chat_bp = Blueprint("chat", __name__)
 UPLOAD_FOLDER = "uploads"
 os.makedirs(UPLOAD_FOLDER, exist_ok=True) 
 
-def call_llm(messages):
-    logger.debug(f"Calling LLM with {len(messages)} messages")
+def call_llm(messages, user_name=None, conversation_history=None):
+    """
+    Call the real Keji AI implementation with conversation context.
+    
+    Args:
+        messages: List of conversation history (contains latest user message)
+        user_name: Optional user's name for personalization
+        conversation_history: Filtered conversation history for context (includes memory summary)
+    
+    Returns:
+        dict: Structured response (chat or recommendation) from Keji AI
+    """
+    logger.debug(f"Calling Keji AI with {len(messages)} messages")
     logger.debug(f"Message history: {[msg.get('role', 'unknown') for msg in messages]}")
 
-    # Possible normal chat responses
-    chat_responses = [
-        "Hi",
-        "Hello world!",
-        "Yes antidisestablishmentarianism now wait supercalifragilisticexpialidocious done.",
-        "pneumonoultramicroscopicsilicovolcanoconiosispneumonoultramicroscopicsilicovolcanoconiosispneumonoultramicroscopicsilicovolcanoconiosispneumonoultramicroscopicsilicovolcanoconiosispneumonoultramicroscopicsilicovolcanoconiosispneumonoultramicroscopicsilicovolcanoconiosispneumonoultramicroscopicsilicovolcanoconiosis",
-        "Here is a deliberately long passage, written in a verbose and meandering style, with the sole purpose of making sure your code is resilient against excessively wordy inputs. Imagine, if you will, a user who simply refuses to stop typing: they pile on adjective after adjective, clause after clause, weaving together a tapestry of words that drags on far longer than is reasonable. Your system, of course, needs to accept this flood of text without complaint, store it, perhaps even process it, and ultimately return something coherent. This sentence keeps expanding, testing the buffer, pushing the limits, and proving once and for all that length alone should never break functionality.",
-    ]
-
-    # Possible food recommendations
-    recommendation_responses = [
-        {
-            "title": "Rice and Beans Concoction",
-            "content": "You fit go to the street to get a plate of rice from any buka near you. "
-                    "Make sure their food is neat and hygienic though, your budget no fit buy good food sha.",
-            "health": [
-                {
-                    "label": "Complete Protein",
-                    "description": "Rice lacks lysine, and beans lack methionine. Together, they form a complete protein with all essential amino acids."
-                },
-                {
-                    "label": "High Fiber",
-                    "description": "Promotes satiety, regulates blood sugar, and supports gut health."
-                },
-                {
-                    "label": "Plant-Based",
-                    "description": "Ideal for vegetarian or vegan diets."
-                }
-            ]
-        },
-        {
-            "title": "Suya with Cold Drink",
-            "content": "Find a suya spot near you, preferably one that grills fresh meat. "
-                    "Pair it with a cold mineral for maximum enjoyment.",
-            "health": [
-                {
-                    "label": "High Protein",
-                    "description": "Suya provides protein for muscle repair and energy."
-                },
-                {
-                    "label": "Caution",
-                    "description": "Processed drinks may be high in sugar, so consume in moderation."
-                }
-            ]
-        },
-        {
-            "title": "Efo Riro with Semovita",
-            "content": "A good swallow meal dey always hit. If you sabi cook, prepare your efo with assorted. "
-                    "Otherwise, look for a local buka wey dem sabi better Yoruba soup.",
-            # "health": [
-            #     {
-            #         "label": "Rich in Iron & Vitamins",
-            #         "description": "Efo riro is packed with leafy greens, supporting blood health and boosting immunity."
-            #     },
-            #     {
-            #         "label": "Balanced Meal",
-            #         "description": "Semovita provides carbohydrates for energy, while the soup delivers protein and micronutrients."
-            #     }
-            # ]
-        }
-    ]
-
-
-
-    # Randomly decide whether to return chat or recommendation
-    if random.random() < 0.45:  # 45% chance it's a recommendation
-        rec = random.choice(recommendation_responses)
-        response = {
-            "type": "recommendation",
-            "role": "assistant",
-            "title": rec["title"] if "title" in rec else None,
-            "content": rec["content"] if "content" in rec else None,
-            "health": rec["health"] if "health" in rec else None
-        }
+    # Extract the latest user message
+    if messages and len(messages) > 0:
+        latest_message = messages[-1]
+        user_input = latest_message.get("content", "")
     else:
-        chat_text = random.choice(chat_responses)
-        response = {
+        user_input = "Hi"
+    
+    logger.debug(f"Processing user input: {len(user_input)}...")  # Log first 100 chars
+    
+    # Call the real Keji AI implementation with conversation history
+    try:
+        response = handle_user_input(
+            user_input, 
+            user_name=user_name,
+            conversation_history=conversation_history
+        )
+        logger.debug(f"Keji AI response type: {response.get('type')}")
+        logger.debug(f"Response structure: {list(response.keys())}")
+        return response
+    except Exception as e:
+        logger.error(f"Error in Keji AI: {str(e)}", exc_info=True)
+        # Fallback response
+        return {
             "type": "chat",
             "role": "assistant",
-            "content": chat_text
+            "content": "Omo, something don happen for my side. Abeg try again? I dey here to help you!"
         }
-
-    logger.debug(f"LLM response generated: {response}")
-    return response
 
 
 # def handle_uploaded_files(files):
@@ -122,65 +81,116 @@ def call_llm(messages):
 @chat_bp.route("/chat", methods=["POST"])
 @login_required
 def chat():
-    logger.info(f"Chat request received from user: {current_user.name} (ID: {current_user.id})")
+    logger.info("\n" + "🔵 "*30)
+    logger.info("📨 NEW CHAT REQUEST")
+    logger.info("🔵 "*30)
+    logger.info(f"👤 User: {current_user.name} (ID: {current_user.id})")
     
     user_message = request.form.get("message")
     files = request.files.getlist("files")
 
-    logger.debug(f"User message: {user_message}")
-    logger.debug(f"Number of files uploaded: {len(files)}")
+    logger.info(f"📝 Message length: {len(user_message)} characters")
+    logger.debug(f"📎 Files uploaded: {len(files)}")
+    logger.info("\n")
 
     # 1. Find or create latest conversation
+    logger.debug("🔍 Finding or creating conversation...")
     conversation = Conversation.query.filter_by(user_id=current_user.id)\
         .order_by(Conversation.id.desc()).first()
     if not conversation:
         conversation = Conversation(user_id=current_user.id)
         db.session.add(conversation)
         db.session.commit()
-        logger.info(f"Created new conversation for user {current_user.id} (conversation ID: {conversation.id})")
+        logger.info(f"✅ Created new conversation (ID: {conversation.id})")
     else:
-        logger.debug(f"Using existing conversation ID: {conversation.id}")
+        logger.debug(f"✅ Using existing conversation (ID: {conversation.id})")
+    logger.info("\n")
 
     # 2. Save user message always
+    logger.debug("💾 Saving user message to database...")
     user_msg = Message(conversation_id=conversation.id, sender="user", text=user_message)
     db.session.add(user_msg)
-    logger.debug(f"Saved user message to conversation {conversation.id}")
+    db.session.commit()  # Commit so it's available for context processing
+    logger.debug(f"✅ User message saved to conversation {conversation.id}\n")
 
-    # 3. Gather history
+    # 3. Process conversation context (handles summarization if needed)
+    logger.info("🧠 Processing conversation context...")
+    filtered_history, summarization_occurred = process_conversation_context(
+        conversation,
+        user_message,
+        db.session
+    )
+    
+    if summarization_occurred:
+        logger.info("✨ Conversation was summarized to save tokens")
+    
+    # 4. Gather full history for message list (used for latest message extraction)
     history = Message.query.filter_by(conversation_id=conversation.id)\
         .order_by(Message.timestamp.asc()).all()
-    messages = [{"role": m.sender, "content": m.text} for m in history]
-    messages.append({"role": "user", "content": user_message})
+    messages = [{"role": m.sender if m.sender != "bot" else "assistant", "content": m.text} for m in history]
+    logger.debug(f"✅ Loaded {len(messages)} messages from history\n")
     
-    # 4. Call LLM
-    bot_reply = call_llm(messages)
+    # 5. Call LLM with filtered context (includes memory summary + recent messages)
+    logger.info("🤖 Calling Keji AI with context-aware history...")
+    bot_reply = call_llm(
+        messages,
+        user_name=current_user.name,
+        conversation_history=filtered_history
+    )
+    logger.info("✅ Received response from Keji AI\n")
 
-    # 5. Decide how to handle
+    # 6. Decide how to handle
+    logger.debug("🔀 Determining response type...")
     if isinstance(bot_reply, dict) and bot_reply.get("type") == "recommendation":
         # 🚨 Don't save to DB yet
-        logger.info("Generated a recommendation, not saving yet")
+        logger.info("📌 Response type: RECOMMENDATION (not saving to DB yet)")
+        logger.info(f"   Title: {bot_reply.get('title', 'N/A')}")
+        logger.info(f"   Health benefits: {len(bot_reply.get('health', []))}")
+        logger.info("🔵 "*30 + "\n")
         return jsonify(bot_reply), 200
     else:
         # Normal chat: save immediately
+        logger.info("💬 Response type: CHAT (saving to DB)")
         reply_text = bot_reply["content"] if isinstance(bot_reply, dict) else str(bot_reply)
+        logger.debug(f"   Reply length: {len(reply_text)} characters")
+        
         bot_msg = Message(conversation_id=conversation.id, sender="bot", text=reply_text)
         db.session.add(bot_msg)
         db.session.commit()
-        logger.info(f"Chat completed successfully. Saved bot reply for user {current_user.id}")
+        
+        logger.info(f"✅ Chat completed successfully. Bot reply saved.")
+        logger.info("🔵 "*30 + "\n")
         return jsonify({"type": "chat", "role": "assistant", "content": reply_text}), 200
 
 @chat_bp.route("/accept_recommendation", methods=["POST"])
 @login_required
 def accept_recommendation():
+    logger.info("\n" + "🟢 "*30)
+    logger.info("✅ ACCEPT RECOMMENDATION REQUEST")
+    logger.info("🟢 "*30)
+    logger.info(f"👤 User: {current_user.name} (ID: {current_user.id})")
+    
     data = request.get_json()
     title = data.get("title")
     content = data.get("content")
+    
+    logger.info(f"📌 Recommendation: {title}")
+    logger.debug(f"   Content length: {len(content)} characters")
+    logger.info("\n")
 
     # Find latest conversation
+    logger.debug("🔍 Finding latest conversation...")
     conversation = Conversation.query.filter_by(user_id=current_user.id)\
         .order_by(Conversation.id.desc()).first()
+    
+    if conversation:
+        logger.debug(f"✅ Found conversation (ID: {conversation.id})")
+    else:
+        logger.warning("⚠️  No conversation found!")
+        return jsonify({"status": "error", "message": "No conversation found"}), 404
 
     # Save recommendation as a bot message
+    logger.debug("💾 Saving recommendation to database...")
     bot_msg = Message(
         conversation_id=conversation.id,
         sender="bot",
@@ -188,6 +198,9 @@ def accept_recommendation():
     )
     db.session.add(bot_msg)
     db.session.commit()
+    
+    logger.info("✅ Recommendation saved successfully")
+    logger.info("🟢 "*30 + "\n")
 
     return jsonify({"status": "saved"}), 200
 
@@ -196,23 +209,46 @@ def accept_recommendation():
 @chat_bp.route("/chat/history", methods=["GET"])
 @login_required
 def history():
-    logger.info(f"Chat history request from user: {current_user.name} (ID: {current_user.id})")
+    """
+    Retrieve full conversation history for frontend display.
+    This ALWAYS returns the complete history, never filtered.
+    The frontend needs all messages to display the full conversation.
+    """
+    logger.info("\n" + "🟡 "*30)
+    logger.info("📖 CHAT HISTORY REQUEST")
+    logger.info("🟡 "*30)
+    logger.info(f"👤 User: {current_user.name} (ID: {current_user.id})")
+    logger.info("\n")
     
     # Get latest conversation for this user
+    logger.debug("🔍 Finding latest conversation...")
     conversation = Conversation.query.filter_by(user_id=current_user.id)\
         .order_by(Conversation.id.desc()).first()
 
     if not conversation:
-        logger.debug(f"No conversation found for user {current_user.id}")
+        logger.warning(f"⚠️  No conversation found for user {current_user.id}")
+        logger.info("🟡 "*30 + "\n")
         return jsonify({"messages": []}), 200
 
-    messages = Message.query.filter_by(conversation_id=conversation.id)\
-        .order_by(Message.timestamp.asc()).all()
+    logger.debug(f"✅ Found conversation (ID: {conversation.id})")
     
-    logger.info(f"Retrieved {len(messages)} messages from conversation {conversation.id} for user {current_user.id}")
+    # Get full history using context manager (ensures consistency)
+    full_history = get_full_history_for_frontend(conversation.id)
+    
+    logger.info(f"✅ Retrieved {len(full_history)} messages for frontend")
+    logger.debug(f"   User messages: {sum(1 for m in full_history if m['sender'] == 'user')}")
+    logger.debug(f"   Bot messages: {sum(1 for m in full_history if m['sender'] == 'bot')}")
+    
+    # Log memory summary status
+    if conversation.memory_summary:
+        logger.info(f"💭 Memory summary exists ({conversation.pruned_count} messages summarized)")
+    
+    logger.info("🟡 "*30 + "\n")
 
     return jsonify({
-        "messages": [{"sender": m.sender, "text": m.text, "timestamp": m.timestamp} for m in messages]
+        "messages": full_history,
+        "has_summary": conversation.memory_summary is not None,
+        "summarized_count": conversation.pruned_count or 0
     }), 200
 
 

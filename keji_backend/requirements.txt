@@ -10,4 +10,6 @@ psycopg2-binary
 werkzeug
 apscheduler
 gunicorn
+openai
+tiktoken
 # authlib

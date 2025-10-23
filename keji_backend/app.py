@@ -4,6 +4,7 @@ from flask_migrate import Migrate
 from flask_login import LoginManager, login_required, current_user
 from flask_cors import CORS
 from flask_mail import Mail, Message
+from flask_socketio import SocketIO
 from dotenv import load_dotenv
 import os
 import logging
@@ -27,6 +28,20 @@ CORS(app,
      origins=[FRONTEND_BASE_URL, FRONTEND_URL_LAN],
      allow_headers=["Content-Type", "Authorization"],
      methods=["GET", "POST", "PUT", "DELETE", "OPTIONS"])
+
+# Initialize SocketIO with CORS support
+socketio = SocketIO(
+    app, 
+    cors_allowed_origins=[FRONTEND_BASE_URL, FRONTEND_URL_LAN],
+    async_mode='threading',
+    logger=True,
+    engineio_logger=True,
+    cookie='session',  # Use Flask session cookie
+    manage_session=True,  # Enable session management for Flask-Login
+    ping_timeout=120,  # 2 minutes - wait this long for pong before disconnecting
+    ping_interval=25,  # Send ping every 25 seconds to keep connection alive
+    max_http_buffer_size=10000000  # 10MB buffer for large messages
+)
 
 
 app.config["SECRET_KEY"] = SECRET_KEY
@@ -83,6 +98,9 @@ app.register_blueprint(auth_bp)
 
 from chat import chat_bp
 app.register_blueprint(chat_bp)
+
+# Import WebSocket handlers (must be after socketio initialization)
+import websocket
 
 
 @login_manager.user_loader

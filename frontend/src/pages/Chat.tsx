@@ -7,6 +7,7 @@ import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { getBackendUrl } from "@/lib/utils";
 import { useSession } from "@/contexts/SessionContext";
+import { useSocket } from "@/contexts/SocketContext";
 import RecommendationPopup from "@/components/modals/RecommendationPopup";
 
 const frontendUrl = import.meta.env.VITE_FRONTEND_BASE_URL;
@@ -37,6 +38,16 @@ const Chat = () => {
   const navigate = useNavigate();
   const location = useLocation();
   const { user, isLoading: sessionLoading } = useSession();
+  const { 
+    isConnected, 
+    sendMessage: socketSendMessage, 
+    acceptRecommendation: socketAcceptRecommendation,
+    requestHistory,
+    onReceiveMessage,
+    onReceiveRecommendation,
+    onChatHistory,
+    onError
+  } = useSocket();
   const [messages, setMessages] = useState<Message[]>([]);
   const [inputMessage, setInputMessage] = useState("");
   const [loading, setLoading] = useState(false);
@@ -48,38 +59,101 @@ const Chat = () => {
   const hasProcessedInitialMessage = useRef(false);
   const [textareaHeight, setTextareaHeight] = useState(48); // Initial height in pixels
   const [borderRadius, setBorderRadius] = useState(24); // Initial border radius
+  const [loadingMessage, setLoadingMessage] = useState("Keji is thinking...");
+  const loadingTimerRef = useRef<NodeJS.Timeout | null>(null);
 
-  // ✅ Fetch chat history when component mounts
+  // ✅ Set up WebSocket event listeners
   useEffect(() => {
-    const fetchHistory = async () => {
-      // Only fetch history if user is authenticated
-      if (!user) return;
-      
-      try {
-        const response = await fetch(`${getBackendUrl()}/chat/history`, {
-          method: "GET",
-          credentials: "include",
-        });
+    // Handle incoming messages
+    const cleanupMessage = onReceiveMessage((data) => {
+      console.log('📨 Received message from WebSocket:', data);
+      const aiMessage: Message = {
+        id: data.message_id?.toString() || Date.now().toString(),
+        text: data.content || "Yeah, how can I help you?",
+        sender: "ai",
+        timestamp: data.timestamp ? new Date(data.timestamp) : new Date(),
+      };
+      setMessages((prev) => [...prev, aiMessage]);
+      setLoading(false);
+      // Clear loading timer
+      if (loadingTimerRef.current) {
+        clearTimeout(loadingTimerRef.current);
+        loadingTimerRef.current = null;
+      }
+      setLoadingMessage("Keji is thinking...");
+    });
 
-        if (response.ok) {
-          const data = await response.json();
-          const historyMessages: Message[] = data.messages.map(
-            (m: { text: string; sender: string; timestamp: string }, index: number) => ({
-              id: `history-${index}`,
-              text: m.text,
-              sender: m.sender,
-              timestamp: new Date(m.timestamp),
-            })
-          );
-          setMessages(historyMessages);
-        }
-      } catch (error) {
-        console.error("Error fetching history:", error);
+    // Handle incoming recommendations
+    const cleanupRecommendation = onReceiveRecommendation((data) => {
+      console.log('📌 Received recommendation from WebSocket:', data);
+      setRecommendation({
+        title: data.title || "Food Recommendation",
+        content: data.content || "Here's a food suggestion for you.",
+        health: data.health
+      });
+      setLoading(false);
+      // Clear loading timer
+      if (loadingTimerRef.current) {
+        clearTimeout(loadingTimerRef.current);
+        loadingTimerRef.current = null;
+      }
+      setLoadingMessage("Keji is thinking...");
+    });
+
+    // Handle chat history
+    const cleanupHistory = onChatHistory((data) => {
+      console.log('📖 Received chat history from WebSocket:', data);
+      const historyMessages: Message[] = data.messages.map(
+        (m: { text: string; sender: string; timestamp: string }, index: number) => ({
+          id: `history-${index}`,
+          text: m.text,
+          sender: m.sender,
+          timestamp: new Date(m.timestamp),
+        })
+      );
+      setMessages(historyMessages);
+    });
+
+    // Handle errors
+    const cleanupError = onError((data) => {
+      console.error('⚠️ WebSocket error:', data);
+      const errorMessage: Message = {
+        id: Date.now().toString(),
+        text: data.message || "Sorry, I'm having trouble responding right now. Please try again.",
+        sender: "ai",
+        timestamp: new Date(),
+      };
+      setMessages((prev) => [...prev, errorMessage]);
+      setLoading(false);
+      // Clear loading timer
+      if (loadingTimerRef.current) {
+        clearTimeout(loadingTimerRef.current);
+        loadingTimerRef.current = null;
+      }
+      setLoadingMessage("Keji is thinking...");
+    });
+
+    // Cleanup all handlers on unmount
+    return () => {
+      cleanupMessage();
+      cleanupRecommendation();
+      cleanupHistory();
+      cleanupError();
+      // Clear loading timer on unmount
+      if (loadingTimerRef.current) {
+        clearTimeout(loadingTimerRef.current);
+        loadingTimerRef.current = null;
       }
     };
+  }, [onReceiveMessage, onReceiveRecommendation, onChatHistory, onError]);
 
-    fetchHistory();
-  }, [user]);
+  // ✅ Fetch chat history when component mounts and socket is connected
+  useEffect(() => {
+    if (user && isConnected) {
+      console.log('📖 Requesting chat history via WebSocket');
+      requestHistory();
+    }
+  }, [user, isConnected, requestHistory]);
 
 
   const scrollToBottom = () => {
@@ -146,12 +220,25 @@ const Chat = () => {
   }, [inputMessage]);
 
 
-  const sendMessage = useCallback(async (messageText: string, files?: File[]) => {
+  const sendMessage = useCallback((messageText: string, files?: File[]) => {
     if (!messageText.trim() && !files?.length) return;
     
     // Ensure user is authenticated before sending message
     if (!user) {
       console.error("User not authenticated");
+      return;
+    }
+
+    // Check WebSocket connection
+    if (!isConnected) {
+      console.error("WebSocket not connected");
+      const errorMessage: Message = {
+        id: Date.now().toString(),
+        text: "Connection lost. Please refresh the page.",
+        sender: "ai",
+        timestamp: new Date(),
+      };
+      setMessages((prev) => [...prev, errorMessage]);
       return;
     }
 
@@ -165,61 +252,43 @@ const Chat = () => {
     setInputMessage("");
     setSelectedFiles([]);
     setLoading(true);
+    setLoadingMessage("Keji is thinking...");
 
-    try {
-      const formData = new FormData();
-      formData.append("message", messageText);
+    // Set up progressive loading messages to show processing is ongoing
+    let messageIndex = 0;
+    const progressMessages = [
+      "Keji is thinking...",
+      "Analyzing your request...",
+      "Processing information...",
+      "Preparing your answer...",
+      "Almost ready...",
+      "Still working on it..."
+    ];
 
-      // Handle files properly - check if files exist and are File objects
-      if (files && files.length > 0) {
-        console.log("Sending files to backend:", files.length, "files");
-        for (let i = 0; i < files.length; i++) {
-          formData.append("files", files[i]);
-        }
-      }
-
-      const response = await fetch(`${getBackendUrl()}/chat`, {
-        method: "POST",
-        credentials: "include",
-        body: formData,
-      });
-
-      if (response.ok) {
-        const data: BackendResponse = await response.json();
-        
-        if (data.type === "recommendation") {
-          // Handle recommendation popup
-          setRecommendation({
-            title: data.title || "Food Recommendation",
-            content: data.content || "Here's a food suggestion for you.",
-            health: data.health
-          });
-        } else {
-          // Handle normal chat message
-          const aiMessage: Message = {
-            id: (Date.now() + 1).toString(),
-            text: data.content || "Yeah, how can I help you?",
-            sender: "ai",
-            timestamp: new Date(),
-          };
-          setMessages((prev) => [...prev, aiMessage]);
-        }
-      } else {
-        throw new Error("Failed to send message");
-      }
-    } catch (error) {
-      console.error("Error sending message:", error);
-      const errorMessage: Message = {
-        id: (Date.now() + 1).toString(),
-        text: "Sorry, I'm having trouble responding right now. Please try again.",
-        sender: "ai",
-        timestamp: new Date(),
-      };
-      setMessages((prev) => [...prev, errorMessage]);
-    } finally {
-      setLoading(false);
+    // Clear any existing timer
+    if (loadingTimerRef.current) {
+      clearTimeout(loadingTimerRef.current);
     }
-  }, [user]);
+
+    // Update loading message every 8 seconds
+    const updateLoadingMessage = () => {
+      messageIndex++;
+      if (messageIndex < progressMessages.length) {
+        setLoadingMessage(progressMessages[messageIndex]);
+        loadingTimerRef.current = setTimeout(updateLoadingMessage, 8000);
+      } else {
+        // After all messages, just show "Still processing..."
+        setLoadingMessage("Still processing... Keji is working hard!");
+      }
+    };
+
+    // Start the timer for the first update (after 8 seconds)
+    loadingTimerRef.current = setTimeout(updateLoadingMessage, 8000);
+
+    // Send message via WebSocket
+    console.log('📤 Sending message via WebSocket:', messageText);
+    socketSendMessage(messageText, files);
+  }, [user, isConnected, socketSendMessage]);
 
   useEffect(() => {
     const initialMessage = location.state?.message;
@@ -264,8 +333,27 @@ const Chat = () => {
   };
 
   const handleRecommendationAccept = (acceptanceMessage: string) => {
+    // Save the recommendation via WebSocket
+    if (recommendation) {
+      console.log('✅ Accepting recommendation via WebSocket:', recommendation.title);
+      socketAcceptRecommendation(recommendation.title, recommendation.content);
+      
+      // Add the recommendation to the message list
+      const recMessage: Message = {
+        id: Date.now().toString(),
+        text: `${recommendation.title}: ${recommendation.content}`,
+        sender: "ai",
+        timestamp: new Date(),
+      };
+      setMessages((prev) => [...prev, recMessage]);
+    }
+    
     setRecommendation(null);
-    sendMessage(acceptanceMessage);
+    
+    // Send the acceptance message
+    if (acceptanceMessage) {
+      sendMessage(acceptanceMessage);
+    }
   };
 
   // Show loading while session is being validated
@@ -285,7 +373,7 @@ const Chat = () => {
 
       <div className="flex flex-col h-screen bg-background">
         {/* Header */}
-        <header className="p-2 mt-6">
+        <header className="p-2 mt-6 flex items-center justify-between">
               <Button
                 variant="ghost"
                 onClick={() => navigate("/homepage")}
@@ -305,6 +393,13 @@ const Chat = () => {
                   <line x1="7" y1="12" x2="21" y2="12" />
                 </svg>
               </Button>
+              {/* Connection indicator */}
+              <div className="flex items-center gap-2 mr-4">
+                <div className={`w-2 h-2 rounded-full ${isConnected ? 'bg-green-500' : 'bg-red-500'}`} />
+                <span className="text-xs text-muted-foreground">
+                  {isConnected ? 'Connected' : 'Disconnected'}
+                </span>
+              </div>
             </header>
 
             {/* Chat body (scrollable) */}
@@ -377,16 +472,21 @@ const Chat = () => {
                     />
                   </div>
                   <div className="bg-muted text-foreground px-4 py-3 rounded-2xl">
-                    <div className="flex space-x-1">
-                      <div className="w-2 h-2 bg-muted-foreground rounded-full animate-bounce"></div>
-                      <div
-                        className="w-2 h-2 bg-muted-foreground rounded-full animate-bounce"
-                        style={{ animationDelay: "0.1s" }}
-                      ></div>
-                      <div
-                        className="w-2 h-2 bg-muted-foreground rounded-full animate-bounce"
-                        style={{ animationDelay: "0.2s" }}
-                      ></div>
+                    <div className="flex flex-col gap-1">
+                      <div className="flex space-x-1">
+                        <div className="w-2 h-2 bg-muted-foreground rounded-full animate-bounce"></div>
+                        <div
+                          className="w-2 h-2 bg-muted-foreground rounded-full animate-bounce"
+                          style={{ animationDelay: "0.1s" }}
+                        ></div>
+                        <div
+                          className="w-2 h-2 bg-muted-foreground rounded-full animate-bounce"
+                          style={{ animationDelay: "0.2s" }}
+                        ></div>
+                      </div>
+                      <div className="text-xs text-muted-foreground">
+                        {loadingMessage}
+                      </div>
                     </div>
                   </div>
                 </div>

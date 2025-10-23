@@ -4,6 +4,9 @@ flask-migrate
 flask-login
 flask-cors
 Flask-Mail
+flask-socketio
+python-socketio
+eventlet
 flask-dance #for GitHub, google OAuth
 python-dotenv
 psycopg2-binary

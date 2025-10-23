@@ -67,7 +67,7 @@ def classify_llm(prompt, conversation_history=None):
     return result
 
 
-def call_llm(prompt, keji_prompt_path=None, user_name=None, additional_context=None, conversation_history=None):
+def call_llm(prompt, keji_prompt_path=None, user_name=None, additional_context=None, conversation_history=None, time_of_day=None):
     """
     Call the LLM with Keji's personality and return structured response.
     
@@ -77,6 +77,7 @@ def call_llm(prompt, keji_prompt_path=None, user_name=None, additional_context=N
         user_name: Optional user's name for personalized greetings
         additional_context: Optional dict with extra context (budget info, food options, etc.)
         conversation_history: Optional list of previous messages (includes memory summary if available)
+        time_of_day: Optional time period ('morning', 'afternoon', 'evening', 'night')
     
     Returns:
         dict: Structured response with 'type', 'role', 'content', and optionally 'title' and 'health'
@@ -98,6 +99,9 @@ def call_llm(prompt, keji_prompt_path=None, user_name=None, additional_context=N
     if user_name:
         logger.debug(f"👤 User name provided: {user_name}")
         user_message = f"User name: {user_name}\n{user_message}"
+    if time_of_day:
+        logger.debug(f"🕐 Time of day provided: {time_of_day}")
+        user_message = f"Time of day: {time_of_day}\n{user_message}"
     if additional_context:
         logger.debug(f"📦 Additional context provided: {list(additional_context.keys())}")
         user_message += f"\n\nContext: {json.dumps(additional_context, ensure_ascii=False)}"
@@ -291,7 +295,7 @@ def get_meals_by_ingredients(ingredients):
         return []
 
 
-def handle_user_input(user_input, user_name=None, conversation_history=None):
+def handle_user_input(user_input, user_name=None, conversation_history=None, time_of_day=None):
     """
     Handle user input, classify intent, and return appropriate structured response.
     
@@ -299,6 +303,7 @@ def handle_user_input(user_input, user_name=None, conversation_history=None):
         user_input: The user's message
         user_name: Optional user's name for personalization
         conversation_history: Optional list of previous messages for context
+        time_of_day: Optional time period for time-based greetings
     
     Returns:
         dict: Structured response (chat or recommendation)
@@ -308,6 +313,8 @@ def handle_user_input(user_input, user_name=None, conversation_history=None):
     logger.info("🟢 "*30)
     logger.info(f"📥 Input length: {len(user_input)} characters")
     logger.info(f"👤 User: {user_name if user_name else 'Anonymous'}")
+    if time_of_day:
+        logger.info(f"🕐 Time of day: {time_of_day}")
     if conversation_history:
         logger.info(f"📚 Conversation context: {len(conversation_history)} messages")
     logger.info("\n")
@@ -326,7 +333,7 @@ def handle_user_input(user_input, user_name=None, conversation_history=None):
         prompt = f"User has decided to eat '{decision}'. Confirm their choice with a SHORT, encouraging message (1-2 sentences). Be friendly and supportive!"
         logger.debug(f"   Confirming user's decision: {decision}")
         
-        result = call_llm(prompt, user_name=user_name, additional_context=context, conversation_history=conversation_history)
+        result = call_llm(prompt, user_name=user_name, additional_context=context, conversation_history=conversation_history, time_of_day=time_of_day)
         logger.info("✅ Decision confirmation generated\n")
         return result
     
@@ -344,7 +351,7 @@ def handle_user_input(user_input, user_name=None, conversation_history=None):
                 "note": "Budget is too small for available options"
             }
             prompt = f"User has ₦{budget} but no food options are available within their budget. Respond with empathy and humor."
-            result = call_llm(prompt, user_name=user_name, additional_context=context, conversation_history=conversation_history)
+            result = call_llm(prompt, user_name=user_name, additional_context=context, conversation_history=conversation_history, time_of_day=time_of_day)
             logger.info("✅ Response generated for low budget scenario\n")
             return result
         else:
@@ -360,7 +367,7 @@ def handle_user_input(user_input, user_name=None, conversation_history=None):
             prompt = f"User has ₦{budget} to spend. Pick the BEST option from the {len(foods)} available foods and recommend it. Keep content SHORT (2-3 sentences max) with where to get it and a quick tip. Include health benefits."
             logger.debug(f"   Picking best from {len(foods)} options for RECOMMENDATION")
             
-            result = call_llm(prompt, user_name=user_name, additional_context=context, conversation_history=conversation_history)
+            result = call_llm(prompt, user_name=user_name, additional_context=context, conversation_history=conversation_history, time_of_day=time_of_day)
             logger.info("✅ Food recommendation generated\n")
             return result
 
@@ -378,7 +385,7 @@ def handle_user_input(user_input, user_name=None, conversation_history=None):
                 "note": "No exact matches in database"
             }
             prompt = f"User has these ingredients: {', '.join(ingredients)}. No exact matches found. Suggest ONE creative meal idea they can make. Keep it SHORT (2-3 sentences)."
-            result = call_llm(prompt, user_name=user_name, additional_context=context, conversation_history=conversation_history)
+            result = call_llm(prompt, user_name=user_name, additional_context=context, conversation_history=conversation_history, time_of_day=time_of_day)
             logger.info("✅ Creative meal suggestions generated\n")
             return result
         else:
@@ -394,7 +401,7 @@ def handle_user_input(user_input, user_name=None, conversation_history=None):
             prompt = f"User has these ingredients: {', '.join(ingredients)}. Pick the BEST meal from the {len(foods)} options and recommend it. Keep content SHORT (2-3 sentences max) with a quick cooking tip. Include health benefits."
             logger.debug(f"   Picking best from {len(foods)} options for RECOMMENDATION")
             
-            result = call_llm(prompt, user_name=user_name, additional_context=context, conversation_history=conversation_history)
+            result = call_llm(prompt, user_name=user_name, additional_context=context, conversation_history=conversation_history, time_of_day=time_of_day)
             logger.info("✅ Ingredient-based recommendation generated\n")
             return result
 
@@ -402,7 +409,7 @@ def handle_user_input(user_input, user_name=None, conversation_history=None):
         # General chat - no specific intent detected
         logger.info("💬 Processing CHAT intent (general conversation)")
         chat_message = intent.get("chat", user_input)
-        result = call_llm(chat_message, user_name=user_name, conversation_history=conversation_history)
+        result = call_llm(chat_message, user_name=user_name, conversation_history=conversation_history, time_of_day=time_of_day)
         logger.info("✅ Chat response generated\n")
         return result
 

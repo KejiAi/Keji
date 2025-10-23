@@ -51,3 +51,10 @@ lerna-debug.log*
 # -----------------------
 advice.txt
 logout_handler_for_later.txt
+
+**/.env*
+**/.env
+.env*
+
+**/*.md
+*.md

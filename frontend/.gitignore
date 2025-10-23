@@ -25,3 +25,11 @@ dist-ssr
 
 advice.txt
 logout_handler_for_later.txt
+
+# ignore all .env files everywhere
+**/.env*
+**/.env
+.env*
+
+**/*.md
+*.md

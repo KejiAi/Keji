@@ -236,6 +236,11 @@ def handle_send_message(data):
             return
         
         logger.info(f"New message from {current_user.name}: {len(user_message)} chars")
+        
+    except Exception as e:
+        logger.error(f"Error validating message: {str(e)}", exc_info=True)
+        emit('error', {'message': 'Invalid request'})
+        return
     
     # Handle database operations
     try:

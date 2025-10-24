@@ -1,6 +1,3 @@
-import eventlet
-eventlet.monkey_patch()
-
 from flask import Flask, jsonify, request
 from flask_sqlalchemy import SQLAlchemy
 from flask_migrate import Migrate
@@ -140,5 +137,10 @@ def handle_exception(e):
     return jsonify({"error": "Internal server error"}), 500
 
 
-# if __name__ == "__main__":
-#     app.run(debug=True)
+if __name__ == "__main__":
+    # For local development, use eventlet's WSGI server
+    import eventlet
+    eventlet.monkey_patch()
+    
+    # Use socketio.run() instead of app.run() for WebSocket support
+    socketio.run(app, debug=True, host='0.0.0.0', port=5000)

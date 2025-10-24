@@ -19,17 +19,27 @@ SECRET_KEY = os.getenv("SECRET_KEY")
 SQLALCHEMY_DATABASE_URI = os.getenv("SQLALCHEMY_DATABASE_URI")
 FRONTEND_BASE_URL = os.getenv("FRONTEND_BASE_URL")
 FRONTEND_URL_LAN = os.getenv("FRONTEND_URL_LAN")
+ENV = os.getenv("FLASK_ENV", "development")
+
+# Build CORS origins list based on environment
+cors_origins = []
+if FRONTEND_BASE_URL:
+    cors_origins.append(FRONTEND_BASE_URL)
+if ENV != "production" and FRONTEND_URL_LAN:
+    cors_origins.append(FRONTEND_URL_LAN)  # Only include LAN in development
+
+# Fallback to allow all origins if none configured
+if not cors_origins:
+    cors_origins = ["*"]
 
 CORS(app, 
      supports_credentials=True, 
-     origins=[FRONTEND_BASE_URL, FRONTEND_URL_LAN],
+     origins=cors_origins,
      allow_headers=["Content-Type", "Authorization"],
      methods=["GET", "POST", "PUT", "DELETE", "OPTIONS"])
 
 app.config["SECRET_KEY"] = SECRET_KEY
 app.config["SQLALCHEMY_DATABASE_URI"] = SQLALCHEMY_DATABASE_URI
-
-ENV = os.getenv("FLASK_ENV", "development")
 
 if ENV == "production":
     app.config["SESSION_COOKIE_SAMESITE"] = "None"
@@ -71,7 +81,7 @@ mail.init_app(app)
 # Initialize SocketIO with app and configuration
 socketio.init_app(
     app, 
-    cors_allowed_origins=[FRONTEND_BASE_URL, FRONTEND_URL_LAN],
+    cors_allowed_origins=cors_origins,  # Use the same filtered origins list
     async_mode='eventlet',
     logger=True,
     engineio_logger=True,
@@ -100,28 +110,23 @@ import websocket
 
 @login_manager.user_loader
 def load_user(user_id):
-    logger.debug(f"Loading user with ID: {user_id}")
     user = User.query.get(int(user_id))
-    if user:
-        logger.debug(f"User loaded successfully: {user.name} ({user.email})")
-    else:
+    if not user:
         logger.warning(f"User not found with ID: {user_id}")
     return user
 
 # Request/Response logging middleware
 @app.before_request
 def log_request_info():
-    logger.info(f"Request: {request.method} {request.url}")
-    logger.debug(f"Request headers: {dict(request.headers)}")
-    if request.is_json:
-        logger.debug(f"Request JSON data: {request.get_json()}")
-    elif request.form:
-        logger.debug(f"Request form data: {dict(request.form)}")
+    # Only log non-health check requests
+    if request.path != '/health':
+        logger.info(f"{request.method} {request.path}")
 
 @app.after_request
 def log_response_info(response):
-    logger.info(f"Response: {response.status_code} for {request.method} {request.url}")
-    logger.debug(f"Response headers: {dict(response.headers)}")
+    # Only log non-200 responses and non-health checks
+    if response.status_code >= 400 and request.path != '/health':
+        logger.warning(f"{request.method} {request.path} -> {response.status_code}")
     return response
 
 # Error logging
@@ -129,6 +134,21 @@ def log_response_info(response):
 def handle_exception(e):
     logger.error(f"Unhandled exception: {str(e)}", exc_info=True)
     return jsonify({"error": "Internal server error"}), 500
+
+# Root endpoint to prevent 404s from health checks
+@app.route('/')
+def root():
+    """Root endpoint to prevent 404s from health checks"""
+    return jsonify({
+        'message': 'Keji AI Backend API',
+        'status': 'running',
+        'endpoints': {
+            'health': '/health',
+            'chat': '/api/chat',
+            'auth': '/api/auth',
+            'websocket': 'WebSocket connection available'
+        }
+    }), 200
 
 # Health check endpoint for Render and monitoring
 @app.route('/health')
@@ -151,9 +171,9 @@ if __name__ == "__main__":
     # For development: python run_dev.py
     # For production: gunicorn --config gunicorn_config.py app:app
     
-    print("⚠️  WARNING: Running app.py directly is not recommended!")
-    print("   Use 'python run_dev.py' for development mode.")
-    print("   Use 'gunicorn --config gunicorn_config.py app:app' for production.")
+    print("WARNING: Running app.py directly is not recommended!")
+    print("Use 'python run_dev.py' for development mode.")
+    print("Use 'gunicorn --config gunicorn_config.py app:app' for production.")
     print()
     print("   Attempting to start anyway (may have eventlet warnings)...")
     print()

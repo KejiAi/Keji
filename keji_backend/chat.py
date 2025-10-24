@@ -1,6 +1,6 @@
 from flask import Blueprint, request, jsonify
 from flask_login import login_required, current_user
-from app import db
+from extensions import db
 from models import Conversation, Message
 import random
 import os
@@ -50,11 +50,20 @@ def should_send_context_info(conversation_history):
     Returns:
         tuple: (should_send_time: bool, should_send_name: bool, current_time_of_day: str)
     """
-    current_time = get_time_of_day()
-    
-    # If conversation is new or very short, send both
-    if len(conversation_history) < 2:
-        return True, True, current_time
+    try:
+        current_time = get_time_of_day()
+        
+        # Safety check
+        if not conversation_history or not isinstance(conversation_history, list):
+            return True, True, current_time
+        
+        # If conversation is new or very short, send both
+        if len(conversation_history) < 2:
+            return True, True, current_time
+    except Exception as e:
+        logger.error(f"Error in should_send_context_info: {str(e)}")
+        # Fallback: send both
+        return True, True, get_time_of_day()
     
     # Count user messages for name sending logic (every 10 messages)
     user_message_count = sum(1 for msg in conversation_history if msg.sender == "user")
@@ -86,7 +95,7 @@ def should_send_context_info(conversation_history):
         # No bot message found, this might be first interaction
         should_send_time = True
     
-    logger.debug(f"🕐 Context decision: time={should_send_time} (current={current_time}), name={should_send_name} (msg#{user_message_count})")
+    logger.debug(f"Context: time={should_send_time} (current={current_time}), name={should_send_name} (msg#{user_message_count})")
     
     return should_send_time, should_send_name, current_time 
 
@@ -103,35 +112,52 @@ def call_llm(messages, user_name=None, conversation_history=None, time_of_day=No
     Returns:
         dict: Structured response (chat or recommendation) from Keji AI
     """
-    logger.debug(f"Calling Keji AI with {len(messages)} messages")
-    logger.debug(f"Message history: {[msg.get('role', 'unknown') for msg in messages]}")
-    if user_name:
-        logger.debug(f"👤 User name: {user_name}")
-    if time_of_day:
-        logger.debug(f"🕐 Time of day: {time_of_day}")
-
-    # Extract the latest user message
-    if messages and len(messages) > 0:
-        latest_message = messages[-1]
-        user_input = latest_message.get("content", "")
-    else:
-        user_input = "Hi"
-    
-    logger.debug(f"Processing user input: {len(user_input)} characters")
-    
-    # Call the real Keji AI implementation with conversation history
     try:
+        # Validate inputs
+        if not messages or not isinstance(messages, list):
+            logger.warning("Invalid messages parameter, using default")
+            messages = []
+        
+        logger.debug(f"Calling AI with {len(messages)} messages")
+        if user_name:
+            logger.debug(f"User name: {user_name}")
+        if time_of_day:
+            logger.debug(f"Time of day: {time_of_day}")
+
+        # Extract the latest user message
+        if messages and len(messages) > 0:
+            latest_message = messages[-1]
+            user_input = latest_message.get("content", "") if isinstance(latest_message, dict) else "Hi"
+        else:
+            user_input = "Hi"
+        
+        if not user_input or not user_input.strip():
+            user_input = "Hi"
+        
+        logger.debug(f"Processing user input: {len(user_input)} characters")
+        
+        # Call the real Keji AI implementation with conversation history
         response = handle_user_input(
             user_input, 
             user_name=user_name,
             conversation_history=conversation_history,
             time_of_day=time_of_day
         )
+        
+        # Validate response
+        if not response or not isinstance(response, dict):
+            logger.error("Invalid response from AI, using fallback")
+            return {
+                "type": "chat",
+                "role": "assistant",
+                "content": "Yeah, how can I help you?"
+            }
+        
         logger.debug(f"Keji AI response type: {response.get('type')}")
-        logger.debug(f"Response structure: {list(response.keys())}")
         return response
+        
     except Exception as e:
-        logger.error(f"Error in Keji AI: {str(e)}", exc_info=True)
+        logger.error(f"Error in call_llm: {str(e)}", exc_info=True)
         # Fallback response
         return {
             "type": "chat",
@@ -158,132 +184,159 @@ def call_llm(messages, user_name=None, conversation_history=None, time_of_day=No
 @chat_bp.route("/chat", methods=["POST"])
 @login_required
 def chat():
-    logger.info("\n" + "🔵 "*30)
-    logger.info("📨 NEW CHAT REQUEST")
-    logger.info("🔵 "*30)
-    logger.info(f"👤 User: {current_user.name} (ID: {current_user.id})")
-    
-    user_message = request.form.get("message")
-    files = request.files.getlist("files")
-
-    logger.info(f"📝 Message length: {len(user_message)} characters")
-    logger.debug(f"📎 Files uploaded: {len(files)}")
-    logger.info("\n")
-
-    # 1. Find or create latest conversation
-    logger.debug("🔍 Finding or creating conversation...")
-    conversation = Conversation.query.filter_by(user_id=current_user.id)\
-        .order_by(Conversation.id.desc()).first()
-    if not conversation:
-        conversation = Conversation(user_id=current_user.id)
-        db.session.add(conversation)
-        db.session.commit()
-        logger.info(f"✅ Created new conversation (ID: {conversation.id})")
-    else:
-        logger.debug(f"✅ Using existing conversation (ID: {conversation.id})")
-    logger.info("\n")
-
-    # 2. Save user message always
-    logger.debug("💾 Saving user message to database...")
-    user_msg = Message(conversation_id=conversation.id, sender="user", text=user_message)
-    db.session.add(user_msg)
-    db.session.commit()  # Commit so it's available for context processing
-    logger.debug(f"✅ User message saved to conversation {conversation.id}\n")
-
-    # 3. Process conversation context (handles summarization if needed)
-    logger.info("🧠 Processing conversation context...")
-    filtered_history, summarization_occurred = process_conversation_context(
-        conversation,
-        user_message,
-        db.session
-    )
-    
-    if summarization_occurred:
-        logger.info("✨ Conversation was summarized to save tokens")
-    
-    # 4. Gather full history for message list (used for latest message extraction)
-    history = Message.query.filter_by(conversation_id=conversation.id)\
-        .order_by(Message.timestamp.asc()).all()
-    messages = [{"role": m.sender if m.sender != "bot" else "assistant", "content": m.text} for m in history]
-    logger.debug(f"✅ Loaded {len(messages)} messages from history\n")
-    
-    # 5. Determine if we should send time and name context
-    send_time, send_name, time_of_day = should_send_context_info(history)
-    
-    # 6. Call LLM with filtered context (includes memory summary + recent messages)
-    logger.info("🤖 Calling Keji AI with context-aware history...")
-    bot_reply = call_llm(
-        messages,
-        user_name=current_user.name if send_name else None,
-        conversation_history=filtered_history,
-        time_of_day=time_of_day if send_time else None
-    )
-    logger.info("✅ Received response from Keji AI\n")
-
-    # 6. Decide how to handle
-    logger.debug("🔀 Determining response type...")
-    if isinstance(bot_reply, dict) and bot_reply.get("type") == "recommendation":
-        # 🚨 Don't save to DB yet
-        logger.info("📌 Response type: RECOMMENDATION (not saving to DB yet)")
-        logger.info(f"   Title: {bot_reply.get('title', 'N/A')}")
-        logger.info(f"   Health benefits: {len(bot_reply.get('health', []))}")
-        logger.info("🔵 "*30 + "\n")
-        return jsonify(bot_reply), 200
-    else:
-        # Normal chat: save immediately
-        logger.info("💬 Response type: CHAT (saving to DB)")
-        reply_text = bot_reply["content"] if isinstance(bot_reply, dict) else str(bot_reply)
-        logger.debug(f"   Reply length: {len(reply_text)} characters")
+    try:
+        user_message = request.form.get("message")
         
-        bot_msg = Message(conversation_id=conversation.id, sender="bot", text=reply_text)
-        db.session.add(bot_msg)
+        # Validate message
+        if not user_message or not user_message.strip():
+            return jsonify({"error": "Empty message"}), 400
+        
+        if len(user_message) > 5000:
+            return jsonify({"error": "Message too long (max 5000 characters)"}), 400
+        
+        files = request.files.getlist("files")
+        
+        logger.info(f"HTTP chat request from {current_user.name}: {len(user_message)} chars")
+    except Exception as e:
+        logger.error(f"Error validating chat request: {str(e)}", exc_info=True)
+        return jsonify({"error": "Invalid request"}), 400
+
+    try:
+        # 1. Find or create latest conversation
+        conversation = Conversation.query.filter_by(user_id=current_user.id)\
+            .order_by(Conversation.id.desc()).first()
+        if not conversation:
+            conversation = Conversation(user_id=current_user.id)
+            db.session.add(conversation)
+            db.session.commit()
+            logger.info(f"Created new conversation (ID: {conversation.id})")
+
+    except Exception as e:
+        logger.error(f"Database error creating conversation: {str(e)}", exc_info=True)
+        db.session.rollback()
+        return jsonify({"error": "Failed to create conversation"}), 500
+
+    try:
+        # 2. Save user message
+        user_msg = Message(conversation_id=conversation.id, sender="user", text=user_message)
+        db.session.add(user_msg)
         db.session.commit()
         
-        logger.info(f"✅ Chat completed successfully. Bot reply saved.")
-        logger.info("🔵 "*30 + "\n")
+    except Exception as e:
+        logger.error(f"Database error saving message: {str(e)}", exc_info=True)
+        db.session.rollback()
+        return jsonify({"error": "Failed to save message"}), 500
+
+    try:
+        # 3. Process conversation context
+        filtered_history, summarization_occurred = process_conversation_context(
+            conversation,
+            user_message,
+            db.session
+        )
+        
+        # 4. Gather full history
+        history = Message.query.filter_by(conversation_id=conversation.id)\
+            .order_by(Message.timestamp.asc()).all()
+        messages = [{"role": m.sender if m.sender != "bot" else "assistant", "content": m.text} for m in history]
+        
+        # 5. Determine context info
+        send_time, send_name, time_of_day = should_send_context_info(history)
+        
+        # 6. Call AI
+        logger.info("Processing with AI...")
+        bot_reply = call_llm(
+            messages,
+            user_name=current_user.name if send_name else None,
+            conversation_history=filtered_history,
+            time_of_day=time_of_day if send_time else None
+        )
+        logger.info("AI response received")
+
+    except Exception as e:
+        logger.error(f"Error processing with AI: {str(e)}", exc_info=True)
+        # Return fallback message
+        return jsonify({
+            "type": "chat",
+            "role": "assistant",
+            "content": "Omo, something don happen for my side. Abeg try again? I dey here to help you!"
+        }), 200
+
+    try:
+        # 7. Handle response
+        if isinstance(bot_reply, dict) and bot_reply.get("type") == "recommendation":
+            # Don't save to DB yet
+            logger.info(f"Recommendation: {bot_reply.get('title', 'N/A')}")
+            return jsonify(bot_reply), 200
+        else:
+            # Normal chat: save immediately
+            reply_text = bot_reply.get("content") if isinstance(bot_reply, dict) else str(bot_reply)
+            
+            if not reply_text:
+                logger.warning("Empty reply from AI, using fallback")
+                reply_text = "Yeah, how can I help you?"
+            
+            bot_msg = Message(conversation_id=conversation.id, sender="bot", text=reply_text)
+            db.session.add(bot_msg)
+            db.session.commit()
+            
+            logger.info("Chat message saved and sent")
+            return jsonify({"type": "chat", "role": "assistant", "content": reply_text}), 200
+            
+    except Exception as e:
+        logger.error(f"Error saving bot response: {str(e)}", exc_info=True)
+        db.session.rollback()
+        # Still return the response even if save failed
+        reply_text = bot_reply.get("content", "Yeah, how can I help you?") if isinstance(bot_reply, dict) else str(bot_reply)
         return jsonify({"type": "chat", "role": "assistant", "content": reply_text}), 200
 
 @chat_bp.route("/accept_recommendation", methods=["POST"])
 @login_required
 def accept_recommendation():
-    logger.info("\n" + "🟢 "*30)
-    logger.info("✅ ACCEPT RECOMMENDATION REQUEST")
-    logger.info("🟢 "*30)
-    logger.info(f"👤 User: {current_user.name} (ID: {current_user.id})")
-    
-    data = request.get_json()
-    title = data.get("title")
-    content = data.get("content")
-    
-    logger.info(f"📌 Recommendation: {title}")
-    logger.debug(f"   Content length: {len(content)} characters")
-    logger.info("\n")
+    try:
+        data = request.get_json()
+        
+        # Validate data
+        if not data or not isinstance(data, dict):
+            return jsonify({"status": "error", "message": "Invalid data"}), 400
+        
+        title = data.get("title")
+        content = data.get("content")
+        
+        if not title or not content:
+            return jsonify({"status": "error", "message": "Missing title or content"}), 400
+        
+        logger.info(f"Accepting recommendation: {title} (User: {current_user.name})")
 
-    # Find latest conversation
-    logger.debug("🔍 Finding latest conversation...")
-    conversation = Conversation.query.filter_by(user_id=current_user.id)\
-        .order_by(Conversation.id.desc()).first()
-    
-    if conversation:
-        logger.debug(f"✅ Found conversation (ID: {conversation.id})")
-    else:
-        logger.warning("⚠️  No conversation found!")
-        return jsonify({"status": "error", "message": "No conversation found"}), 404
+    except Exception as e:
+        logger.error(f"Error validating recommendation data: {str(e)}", exc_info=True)
+        return jsonify({"status": "error", "message": "Invalid request"}), 400
 
-    # Save recommendation as a bot message
-    logger.debug("💾 Saving recommendation to database...")
-    bot_msg = Message(
-        conversation_id=conversation.id,
-        sender="bot",
-        text=f"{title}: {content}"
-    )
-    db.session.add(bot_msg)
-    db.session.commit()
-    
-    logger.info("✅ Recommendation saved successfully")
-    logger.info("🟢 "*30 + "\n")
+    try:
+        # Find latest conversation
+        conversation = Conversation.query.filter_by(user_id=current_user.id)\
+            .order_by(Conversation.id.desc()).first()
+        
+        if not conversation:
+            logger.warning("No conversation found")
+            return jsonify({"status": "error", "message": "No conversation found"}), 404
 
-    return jsonify({"status": "saved"}), 200
+        # Save recommendation as a bot message
+        bot_msg = Message(
+            conversation_id=conversation.id,
+            sender="bot",
+            text=f"{title}: {content}"
+        )
+        db.session.add(bot_msg)
+        db.session.commit()
+        
+        logger.info("Recommendation saved")
+        return jsonify({"status": "saved"}), 200
+        
+    except Exception as e:
+        logger.error(f"Database error saving recommendation: {str(e)}", exc_info=True)
+        db.session.rollback()
+        return jsonify({"status": "error", "message": "Failed to save recommendation"}), 500
 
 
 
@@ -295,42 +348,29 @@ def history():
     This ALWAYS returns the complete history, never filtered.
     The frontend needs all messages to display the full conversation.
     """
-    logger.info("\n" + "🟡 "*30)
-    logger.info("📖 CHAT HISTORY REQUEST")
-    logger.info("🟡 "*30)
-    logger.info(f"👤 User: {current_user.name} (ID: {current_user.id})")
-    logger.info("\n")
-    
-    # Get latest conversation for this user
-    logger.debug("🔍 Finding latest conversation...")
-    conversation = Conversation.query.filter_by(user_id=current_user.id)\
-        .order_by(Conversation.id.desc()).first()
+    try:
+        logger.info(f"HTTP history request from {current_user.name}")
+        
+        # Get latest conversation for this user
+        conversation = Conversation.query.filter_by(user_id=current_user.id)\
+            .order_by(Conversation.id.desc()).first()
 
-    if not conversation:
-        logger.warning(f"⚠️  No conversation found for user {current_user.id}")
-        logger.info("🟡 "*30 + "\n")
-        return jsonify({"messages": []}), 200
+        if not conversation:
+            return jsonify({"messages": []}), 200
+        
+        # Get full history using context manager
+        full_history = get_full_history_for_frontend(conversation.id)
+        logger.info(f"Retrieved {len(full_history)} messages")
 
-    logger.debug(f"✅ Found conversation (ID: {conversation.id})")
-    
-    # Get full history using context manager (ensures consistency)
-    full_history = get_full_history_for_frontend(conversation.id)
-    
-    logger.info(f"✅ Retrieved {len(full_history)} messages for frontend")
-    logger.debug(f"   User messages: {sum(1 for m in full_history if m['sender'] == 'user')}")
-    logger.debug(f"   Bot messages: {sum(1 for m in full_history if m['sender'] == 'bot')}")
-    
-    # Log memory summary status
-    if conversation.memory_summary:
-        logger.info(f"💭 Memory summary exists ({conversation.pruned_count} messages summarized)")
-    
-    logger.info("🟡 "*30 + "\n")
-
-    return jsonify({
-        "messages": full_history,
-        "has_summary": conversation.memory_summary is not None,
-        "summarized_count": conversation.pruned_count or 0
-    }), 200
+        return jsonify({
+            "messages": full_history,
+            "has_summary": conversation.memory_summary is not None,
+            "summarized_count": conversation.pruned_count or 0
+        }), 200
+        
+    except Exception as e:
+        logger.error(f"Error retrieving chat history: {str(e)}", exc_info=True)
+        return jsonify({"messages": [], "error": "Failed to retrieve history"}), 200
 
 
 # if __name__ == "__main__":

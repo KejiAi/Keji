@@ -17,9 +17,7 @@ keji_prompt_path = os.path.join(os.path.dirname(__file__), 'keji_prompt.txt')
 
 client = OpenAI()
 
-logger.info("\n" + "="*60)
-logger.info("🚀 Keji AI Response Module Initialized")
-logger.info("="*60 + "\n")
+logger.info("Keji AI Response Module initialized")
 
 def classify_llm(prompt, conversation_history=None):
     """
@@ -32,9 +30,7 @@ def classify_llm(prompt, conversation_history=None):
     Returns:
         str: JSON classification result
     """
-    logger.debug("\n" + "-"*60)
-    logger.debug("🔍 Classifying user intent...")
-    logger.debug("-"*60 + "\n")
+    logger.debug("Classifying user intent...")
     
     # Build messages array with conversation history
     messages = [{"role": "system", "content": "You are a helpful assistant. Always respond in JSON format."}]
@@ -43,7 +39,7 @@ def classify_llm(prompt, conversation_history=None):
     if conversation_history:
         # Take only last 10 messages for context
         recent_history = conversation_history[-10:] if len(conversation_history) > 10 else conversation_history
-        logger.debug(f"📚 Including {len(recent_history)} recent messages for context")
+        logger.debug(f"Including {len(recent_history)} recent messages for context")
         
         for hist_msg in recent_history:
             # Skip system messages with memory summaries to avoid confusion
@@ -53,7 +49,7 @@ def classify_llm(prompt, conversation_history=None):
     # Add the classification prompt
     messages.append({"role": "user", "content": prompt})
     
-    logger.debug(f"📨 Total messages for classification: {len(messages)}")
+    logger.debug(f"Classification context: {len(messages)} messages")
     
     response = client.chat.completions.create(
         model="gpt-4o-mini",
@@ -61,7 +57,7 @@ def classify_llm(prompt, conversation_history=None):
     )
     
     result = response.choices[0].message.content
-    logger.debug(f"✅ Classification complete: {len(result)} characters")
+    logger.debug(f"Classification complete: {len(result)} chars")
     logger.debug("\n")
     
     return result
@@ -82,9 +78,7 @@ def call_llm(prompt, keji_prompt_path=None, user_name=None, additional_context=N
     Returns:
         dict: Structured response with 'type', 'role', 'content', and optionally 'title' and 'health'
     """
-    logger.info("\n" + "="*60)
-    logger.info("🤖 Calling Keji AI LLM...")
-    logger.info("="*60)
+    logger.info("Calling Keji AI...")
     
     if keji_prompt_path is None:
         keji_prompt_path = globals()['keji_prompt_path']
@@ -92,29 +86,29 @@ def call_llm(prompt, keji_prompt_path=None, user_name=None, additional_context=N
     with open(keji_prompt_path, "r", encoding="utf-8") as file:
         keji_prompt = file.read().strip()
     
-    logger.debug(f"📄 System prompt: {len(keji_prompt)} characters")
+    logger.debug(f"System prompt: {len(keji_prompt)} chars")
 
     # Build the user message with context
     user_message = prompt
     if user_name:
-        logger.debug(f"👤 User name provided: {user_name}")
+        logger.debug(f"User name: {user_name}")
         user_message = f"User name: {user_name}\n{user_message}"
     if time_of_day:
-        logger.debug(f"🕐 Time of day provided: {time_of_day}")
+        logger.debug(f"Time of day: {time_of_day}")
         user_message = f"Time of day: {time_of_day}\n{user_message}"
     if additional_context:
-        logger.debug(f"📦 Additional context provided: {list(additional_context.keys())}")
+        logger.debug(f"Additional context: {list(additional_context.keys())}")
         user_message += f"\n\nContext: {json.dumps(additional_context, ensure_ascii=False)}"
     
-    logger.debug(f"📝 User message length: {len(user_message)} characters")
-    logger.debug("\n🔄 Sending request to OpenAI API...")
+    logger.debug(f"User message: {len(user_message)} chars")
+    logger.debug("Sending request to OpenAI...")
 
     # Build messages array with conversation history
     messages = [{"role": "system", "content": keji_prompt}]
     
     # Add conversation history if provided (already includes memory summary)
     if conversation_history:
-        logger.debug(f"📚 Including {len(conversation_history)} messages from conversation history")
+        logger.debug(f"Including {len(conversation_history)} messages from history")
         for hist_msg in conversation_history:
             # Skip duplicate system messages (summary is already included in history)
             if not (hist_msg.get('role') == 'system' and 'CONVERSATION CONTEXT' in hist_msg.get('content', '')):
@@ -126,7 +120,7 @@ def call_llm(prompt, keji_prompt_path=None, user_name=None, additional_context=N
     # Add the current user message
     messages.append({"role": "user", "content": user_message})
     
-    logger.debug(f"📨 Total messages to send: {len(messages)}")
+    logger.debug(f"Total context messages: {len(messages)}")
 
     response = client.chat.completions.create(
         model="gpt-5",
@@ -134,25 +128,22 @@ def call_llm(prompt, keji_prompt_path=None, user_name=None, additional_context=N
     )
     
     result = response.choices[0].message.content.strip()
-    logger.debug(f"📨 Received LLM response: {len(result)} characters")
+    logger.debug(f"LLM response: {len(result)} chars")
     logger.debug("\n")
     
     # Parse JSON response
     try:
         parsed = json.loads(result)
-        logger.info(f"✅ Successfully parsed JSON response")
+        logger.info("Successfully parsed JSON response")
         logger.info(f"   Response type: {parsed.get('type', 'unknown')}")
         
         # Validate structure
         if "type" in parsed and "role" in parsed and "content" in parsed:
             if parsed.get('type') == 'recommendation':
-                logger.info(f"   📌 Recommendation title: {parsed.get('title', 'N/A')}")
-                logger.info(f"   💊 Health benefits: {len(parsed.get('health', []))} items")
-            logger.info("="*60 + "\n")
+                logger.info(f"Recommendation: {parsed.get('title', 'N/A')}")
             return parsed
         else:
-            logger.warning("⚠️  Incomplete structure, using fallback")
-            logger.info("="*60 + "\n")
+            logger.warning("Incomplete JSON structure, using fallback")
             # Fallback if structure is incomplete
             return {
                 "type": "chat",
@@ -160,7 +151,7 @@ def call_llm(prompt, keji_prompt_path=None, user_name=None, additional_context=N
                 "content": result
             }
     except json.JSONDecodeError as e:
-        logger.error(f"❌ JSON parsing failed: {str(e)}")
+        logger.error(f"JSON parsing failed: {str(e)}")
         logger.error("   Using fallback chat response")
         logger.info("="*60 + "\n")
         # If LLM didn't return valid JSON, wrap it as chat
@@ -182,13 +173,8 @@ def classify_intent(user_input, conversation_history=None):
     Returns:
         dict: Classification result with intent type
     """
-    logger.info("\n" + "="*60)
-    logger.info("🎯 Starting Intent Classification")
-    logger.info("="*60)
-    logger.debug(f"📥 User input length: {len(user_input)} characters")
-    if conversation_history:
-        logger.debug(f"📚 Using conversation context: {len(conversation_history)} messages")
-    logger.debug("\n")
+    logger.info("Classifying intent...")
+    logger.debug(f"Input: {len(user_input)} chars")
     
     prompt = f"""
     You are a classifier. Use the conversation history (if available) to understand context.
@@ -226,58 +212,58 @@ def classify_intent(user_input, conversation_history=None):
     try:
         parsed = json.loads(result)
         if "decision" in parsed:
-            logger.info(f"✅ Intent: DECISION ({parsed['decision']})")
+            logger.info(f"Intent: DECISION ({parsed['decision']})")
         elif "budget" in parsed:
-            logger.info(f"✅ Intent: BUDGET (₦{parsed['budget']})")
+            logger.info(f"Intent: BUDGET (N{parsed['budget']})")
         elif "ingredient" in parsed:
-            logger.info(f"✅ Intent: INGREDIENT ({', '.join(parsed['ingredient'])})")
+            logger.info(f"Intent: INGREDIENT ({', '.join(parsed['ingredient'])})")
         else:
-            logger.info(f"✅ Intent: CHAT")
+            logger.info("Intent: CHAT")
         logger.info("="*60 + "\n")
         return parsed
     except json.JSONDecodeError:
-        logger.warning("⚠️  Failed to parse intent, defaulting to CHAT")
+        logger.warning("Failed to parse intent, defaulting to CHAT")
         logger.info("="*60 + "\n")
         # fallback: wrap as chat if parsing fails
         return {"chat": user_input}
     
 def get_foods_by_budget(budget):
     logger.debug("\n" + "-"*60)
-    logger.debug(f"💰 Searching foods within budget: ₦{budget}")
+    logger.debug(f"Searching foods within budget: N{budget}")
     logger.debug("-"*60)
     
     try:
         with open(food_data_path, 'r', encoding='utf-8') as file:
             foods = json.load(file)
         
-        logger.debug(f"📊 Total foods in database: {len(foods)}")
+        logger.debug(f"Total foods in database: {len(foods)}")
         
         # Filter foods where Price is less than or equal to the budget
         filtered_foods = [food for food in foods if food.get('Price', float('inf')) <= budget]
         
-        logger.info(f"✅ Found {len(filtered_foods)} foods within ₦{budget} budget")
+        logger.info(f"Found {len(filtered_foods)} foods within N{budget} budget")
         logger.debug("-"*60 + "\n")
         
         return filtered_foods
     except FileNotFoundError:
-        logger.error(f"❌ Food database not found: {food_data_path}")
+        logger.error(f"Food database not found: {food_data_path}")
         logger.debug("-"*60 + "\n")
         return []
     except json.JSONDecodeError:
-        logger.error(f"❌ Failed to parse food database JSON")
+        logger.error("Failed to parse food database JSON")
         logger.debug("-"*60 + "\n")
         return []
 
 def get_meals_by_ingredients(ingredients):
     logger.debug("\n" + "-"*60)
-    logger.debug(f"🥘 Searching meals with ingredients: {', '.join(ingredients)}")
+    logger.debug(f"Searching meals with ingredients: {', '.join(ingredients)}")
     logger.debug("-"*60)
     
     try:
         with open(food_data_path, 'r', encoding='utf-8') as file:
             foods = json.load(file)
 
-        logger.debug(f"📊 Total foods in database: {len(foods)}")
+        logger.debug(f"Total foods in database: {len(foods)}")
         
         filtered_foods = []
         for food in foods:
@@ -285,12 +271,12 @@ def get_meals_by_ingredients(ingredients):
             if any(ingredient.lower() in food_name for ingredient in ingredients):
                 filtered_foods.append(food)
 
-        logger.info(f"✅ Found {len(filtered_foods)} meals matching ingredients")
+        logger.info(f"Found {len(filtered_foods)} meals matching ingredients")
         logger.debug("-"*60 + "\n")
         
         return filtered_foods
     except (FileNotFoundError, json.JSONDecodeError) as e:
-        logger.error(f"❌ Error loading food database: {str(e)}")
+        logger.error(f"Error loading food database: {str(e)}")
         logger.debug("-"*60 + "\n")
         return []
 
@@ -308,22 +294,13 @@ def handle_user_input(user_input, user_name=None, conversation_history=None, tim
     Returns:
         dict: Structured response (chat or recommendation)
     """
-    logger.info("\n" + "🟢 "*30)
-    logger.info("🚀 HANDLING USER INPUT")
-    logger.info("🟢 "*30)
-    logger.info(f"📥 Input length: {len(user_input)} characters")
-    logger.info(f"👤 User: {user_name if user_name else 'Anonymous'}")
-    if time_of_day:
-        logger.info(f"🕐 Time of day: {time_of_day}")
-    if conversation_history:
-        logger.info(f"📚 Conversation context: {len(conversation_history)} messages")
-    logger.info("\n")
+    logger.info(f"Processing input: {len(user_input)} chars")
     
     intent = classify_intent(user_input, conversation_history=conversation_history)
 
     if "decision" in intent:
         decision = intent.get("decision", "that")
-        logger.info(f"🎯 Processing DECISION intent: User chose '{decision}'")
+        logger.info(f"Processing DECISION intent: '{decision}'")
         
         # User has made a decision - acknowledge it with a confirmation
         context = {
@@ -334,16 +311,16 @@ def handle_user_input(user_input, user_name=None, conversation_history=None, tim
         logger.debug(f"   Confirming user's decision: {decision}")
         
         result = call_llm(prompt, user_name=user_name, additional_context=context, conversation_history=conversation_history, time_of_day=time_of_day)
-        logger.info("✅ Decision confirmation generated\n")
+        logger.info("Decision confirmation generated")
         return result
     
     elif "budget" in intent:
         budget = intent.get("budget", 0)
-        logger.info(f"💰 Processing BUDGET intent: ₦{budget}")
+        logger.info(f"Processing BUDGET intent: N{budget}")
         foods = get_foods_by_budget(budget)
         
         if not foods:
-            logger.warning(f"⚠️  No foods found within budget ₦{budget}")
+            logger.warning(f"No foods found within budget N{budget}")
             # No foods in budget - let Keji respond with empathy and humor
             context = {
                 "budget": budget,
@@ -352,10 +329,10 @@ def handle_user_input(user_input, user_name=None, conversation_history=None, tim
             }
             prompt = f"User has ₦{budget} but no food options are available within their budget. Respond with empathy and humor."
             result = call_llm(prompt, user_name=user_name, additional_context=context, conversation_history=conversation_history, time_of_day=time_of_day)
-            logger.info("✅ Response generated for low budget scenario\n")
+            logger.info("Low budget response generated")
             return result
         else:
-            logger.info(f"✅ {len(foods)} foods available for ₦{budget}")
+            logger.info(f"{len(foods)} foods available for N{budget}")
             # Always pick ONE best recommendation
             context = {
                 "budget": budget,
@@ -368,16 +345,16 @@ def handle_user_input(user_input, user_name=None, conversation_history=None, tim
             logger.debug(f"   Picking best from {len(foods)} options for RECOMMENDATION")
             
             result = call_llm(prompt, user_name=user_name, additional_context=context, conversation_history=conversation_history, time_of_day=time_of_day)
-            logger.info("✅ Food recommendation generated\n")
+            logger.info("Food recommendation generated")
             return result
 
     elif "ingredient" in intent:
         ingredients = intent.get("ingredient", [])
-        logger.info(f"🥘 Processing INGREDIENT intent: {', '.join(ingredients)}")
+        logger.info(f"Processing INGREDIENT intent: {', '.join(ingredients)}")
         foods = get_meals_by_ingredients(ingredients)
         
         if not foods:
-            logger.warning(f"⚠️  No meals found with ingredients: {', '.join(ingredients)}")
+            logger.warning(f"No meals found with ingredients: {', '.join(ingredients)}")
             # No matching meals - let Keji be creative
             context = {
                 "ingredients": ingredients,
@@ -386,10 +363,10 @@ def handle_user_input(user_input, user_name=None, conversation_history=None, tim
             }
             prompt = f"User has these ingredients: {', '.join(ingredients)}. No exact matches found. Suggest ONE creative meal idea they can make. Keep it SHORT (2-3 sentences)."
             result = call_llm(prompt, user_name=user_name, additional_context=context, conversation_history=conversation_history, time_of_day=time_of_day)
-            logger.info("✅ Creative meal suggestions generated\n")
+            logger.info("Creative meal suggestions generated")
             return result
         else:
-            logger.info(f"✅ {len(foods)} meals found with ingredients")
+            logger.info(f"{len(foods)} meals found with ingredients")
             # Always pick ONE best recommendation
             context = {
                 "ingredients": ingredients,
@@ -402,15 +379,15 @@ def handle_user_input(user_input, user_name=None, conversation_history=None, tim
             logger.debug(f"   Picking best from {len(foods)} options for RECOMMENDATION")
             
             result = call_llm(prompt, user_name=user_name, additional_context=context, conversation_history=conversation_history, time_of_day=time_of_day)
-            logger.info("✅ Ingredient-based recommendation generated\n")
+            logger.info("Ingredient-based recommendation generated")
             return result
 
     else:
         # General chat - no specific intent detected
-        logger.info("💬 Processing CHAT intent (general conversation)")
+        logger.info("Processing CHAT intent")
         chat_message = intent.get("chat", user_input)
         result = call_llm(chat_message, user_name=user_name, conversation_history=conversation_history, time_of_day=time_of_day)
-        logger.info("✅ Chat response generated\n")
+        logger.info("Chat response generated")
         return result
 
 
@@ -462,7 +439,7 @@ if __name__ == "__main__":
             response = handle_user_input(test['input'], user_name=test['user_name'])
             
             print(f"\n{'='*70}")
-            print("📤 RESPONSE:")
+            print("RESPONSE:")
             print(f"{'='*70}")
             print(f"Type: {response.get('type', 'N/A')}")
             print(f"Role: {response.get('role', 'N/A')}")
@@ -480,11 +457,11 @@ if __name__ == "__main__":
             print(f"\n{'='*70}\n")
             
         except Exception as e:
-            print(f"\n❌ ERROR: {str(e)}")
+            print(f"\nERROR: {str(e)}")
             print(f"{'='*70}\n")
             import traceback
             traceback.print_exc()
     
     print("\n" + "="*70)
-    print("✅ TEST MODE COMPLETE")
+    print("TEST MODE COMPLETE")
     print("="*70 + "\n")

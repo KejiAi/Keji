@@ -1,7 +1,7 @@
 from flask import request
 from flask_login import current_user
 from flask_socketio import emit, join_room, leave_room, disconnect
-from app import socketio, db
+from extensions import socketio, db
 from models import Conversation, Message
 from get_response import handle_user_input
 from context_manager import (
@@ -44,11 +44,20 @@ def should_send_context_info(conversation_history):
     Returns:
         tuple: (should_send_time: bool, should_send_name: bool, current_time_of_day: str)
     """
-    current_time = get_time_of_day()
-    
-    # If conversation is new or very short, send both
-    if len(conversation_history) < 2:
-        return True, True, current_time
+    try:
+        current_time = get_time_of_day()
+        
+        # Safety check
+        if not conversation_history or not isinstance(conversation_history, list):
+            return True, True, current_time
+        
+        # If conversation is new or very short, send both
+        if len(conversation_history) < 2:
+            return True, True, current_time
+    except Exception as e:
+        logger.error(f"Error in should_send_context_info: {str(e)}")
+        # Fallback: send both
+        return True, True, get_time_of_day()
     
     # Count user messages for name sending logic (every 10 messages)
     user_message_count = sum(1 for msg in conversation_history if msg.sender == "user")
@@ -80,7 +89,7 @@ def should_send_context_info(conversation_history):
         # No bot message found, this might be first interaction
         should_send_time = True
     
-    logger.debug(f"🕐 Context decision: time={should_send_time} (current={current_time}), name={should_send_name} (msg#{user_message_count})")
+    logger.debug(f"Context: time={should_send_time} (current={current_time}), name={should_send_name} (msg#{user_message_count})")
     
     return should_send_time, should_send_name, current_time 
 
@@ -97,35 +106,52 @@ def call_llm(messages, user_name=None, conversation_history=None, time_of_day=No
     Returns:
         dict: Structured response (chat or recommendation) from Keji AI
     """
-    logger.debug(f"Calling Keji AI with {len(messages)} messages")
-    logger.debug(f"Message history: {[msg.get('role', 'unknown') for msg in messages]}")
-    if user_name:
-        logger.debug(f"👤 User name: {user_name}")
-    if time_of_day:
-        logger.debug(f"🕐 Time of day: {time_of_day}")
-
-    # Extract the latest user message
-    if messages and len(messages) > 0:
-        latest_message = messages[-1]
-        user_input = latest_message.get("content", "")
-    else:
-        user_input = "Hi"
-    
-    logger.debug(f"Processing user input: {len(user_input)} characters")
-    
-    # Call the real Keji AI implementation with conversation history
     try:
+        # Validate inputs
+        if not messages or not isinstance(messages, list):
+            logger.warning("Invalid messages parameter, using default")
+            messages = []
+        
+        logger.debug(f"Calling AI with {len(messages)} messages")
+        if user_name:
+            logger.debug(f"User name: {user_name}")
+        if time_of_day:
+            logger.debug(f"Time of day: {time_of_day}")
+
+        # Extract the latest user message
+        if messages and len(messages) > 0:
+            latest_message = messages[-1]
+            user_input = latest_message.get("content", "") if isinstance(latest_message, dict) else "Hi"
+        else:
+            user_input = "Hi"
+        
+        if not user_input or not user_input.strip():
+            user_input = "Hi"
+        
+        logger.debug(f"Processing user input: {len(user_input)} characters")
+        
+        # Call the real Keji AI implementation with conversation history
         response = handle_user_input(
             user_input, 
             user_name=user_name,
             conversation_history=conversation_history,
             time_of_day=time_of_day
         )
+        
+        # Validate response
+        if not response or not isinstance(response, dict):
+            logger.error("Invalid response from AI, using fallback")
+            return {
+                "type": "chat",
+                "role": "assistant",
+                "content": "Yeah, how can I help you?"
+            }
+        
         logger.debug(f"Keji AI response type: {response.get('type')}")
-        logger.debug(f"Response structure: {list(response.keys())}")
         return response
+        
     except Exception as e:
-        logger.error(f"Error in Keji AI: {str(e)}", exc_info=True)
+        logger.error(f"Error in call_llm: {str(e)}", exc_info=True)
         # Fallback response
         return {
             "type": "chat",
@@ -137,36 +163,41 @@ def call_llm(messages, user_name=None, conversation_history=None, time_of_day=No
 @socketio.on('connect')
 def handle_connect():
     """Handle client connection"""
-    if not current_user.is_authenticated:
-        logger.warning("⚠️  Unauthorized WebSocket connection attempt")
-        return False  # Reject connection
-    
-    logger.info(f"\n🟢 WebSocket connected: User {current_user.name} (ID: {current_user.id})")
-    
-    # Join a room specific to this user
-    user_room = f"user_{current_user.id}"
-    join_room(user_room)
-    logger.debug(f"   Joined room: {user_room}")
-    
-    # Send connection confirmation
-    emit('connected', {
-        'message': 'Connected to Keji AI',
-        'user_id': current_user.id,
-        'user_name': current_user.name
-    })
-    
-    return True
+    try:
+        if not current_user.is_authenticated:
+            logger.warning("Unauthorized WebSocket connection attempt")
+            return False  # Reject connection
+        
+        logger.info(f"WebSocket connected: User {current_user.name} (ID: {current_user.id})")
+        
+        # Join a room specific to this user
+        user_room = f"user_{current_user.id}"
+        join_room(user_room)
+        
+        # Send connection confirmation
+        emit('connected', {
+            'message': 'Connected to Keji AI',
+            'user_id': current_user.id,
+            'user_name': current_user.name
+        })
+        
+        return True
+        
+    except Exception as e:
+        logger.error(f"Error in WebSocket connect: {str(e)}", exc_info=True)
+        return False
 
 
 @socketio.on('disconnect')
 def handle_disconnect():
     """Handle client disconnection"""
-    if current_user.is_authenticated:
-        logger.info(f"🔴 WebSocket disconnected: User {current_user.name} (ID: {current_user.id})")
-        user_room = f"user_{current_user.id}"
-        leave_room(user_room)
-    else:
-        logger.info("🔴 WebSocket disconnected: Unauthenticated user")
+    try:
+        if current_user.is_authenticated:
+            logger.info(f"WebSocket disconnected: User {current_user.name} (ID: {current_user.id})")
+            user_room = f"user_{current_user.id}"
+            leave_room(user_room)
+    except Exception as e:
+        logger.error(f"Error in WebSocket disconnect: {str(e)}", exc_info=True)
 
 
 @socketio.on('send_message')
@@ -180,106 +211,125 @@ def handle_send_message(data):
         'files': list    # Optional list of files (not yet implemented)
     }
     """
-    if not current_user.is_authenticated:
-        emit('error', {'message': 'Not authenticated'})
-        return
+    try:
+        # Validate authentication
+        if not current_user.is_authenticated:
+            emit('error', {'message': 'Not authenticated'})
+            return
+        
+        # Validate data
+        if not data or not isinstance(data, dict):
+            emit('error', {'message': 'Invalid data format'})
+            return
+        
+        user_message = data.get('message', '')
+        files = data.get('files', [])  # For future file support
+        
+        # Validate message
+        if not user_message or not user_message.strip():
+            emit('error', {'message': 'Empty message'})
+            return
+        
+        # Limit message length to prevent abuse
+        if len(user_message) > 5000:
+            emit('error', {'message': 'Message too long (max 5000 characters)'})
+            return
+        
+        logger.info(f"New message from {current_user.name}: {len(user_message)} chars")
     
-    logger.info("\n" + "🔵 "*30)
-    logger.info("📨 NEW WEBSOCKET MESSAGE")
-    logger.info("🔵 "*30)
-    logger.info(f"👤 User: {current_user.name} (ID: {current_user.id})")
-    
-    user_message = data.get('message', '')
-    files = data.get('files', [])  # For future file support
-    
-    logger.info(f"📝 Message length: {len(user_message)} characters")
-    logger.info("\n")
-    
-    if not user_message.strip():
-        emit('error', {'message': 'Empty message'})
-        return
-    
+    # Handle database operations
     try:
         # 1. Find or create latest conversation
-        logger.debug("🔍 Finding or creating conversation...")
         conversation = Conversation.query.filter_by(user_id=current_user.id)\
             .order_by(Conversation.id.desc()).first()
         if not conversation:
             conversation = Conversation(user_id=current_user.id)
             db.session.add(conversation)
             db.session.commit()
-            logger.info(f"✅ Created new conversation (ID: {conversation.id})")
-        else:
-            logger.debug(f"✅ Using existing conversation (ID: {conversation.id})")
-        logger.info("\n")
+            logger.info(f"Created new conversation (ID: {conversation.id})")
 
-        # 2. Save user message always
-        logger.debug("💾 Saving user message to database...")
+    except Exception as e:
+        logger.error(f"Database error creating conversation: {str(e)}", exc_info=True)
+        db.session.rollback()
+        emit('error', {'message': 'Failed to create conversation'})
+        return
+
+    try:
+        # 2. Save user message
         user_msg = Message(conversation_id=conversation.id, sender="user", text=user_message)
         db.session.add(user_msg)
-        db.session.commit()  # Commit so it's available for context processing
-        logger.debug(f"✅ User message saved to conversation {conversation.id}\n")
+        db.session.commit()
         
         # Emit confirmation that message was received
         emit('message_saved', {
             'message_id': user_msg.id,
             'timestamp': user_msg.timestamp.isoformat()
         })
+        
+    except Exception as e:
+        logger.error(f"Database error saving message: {str(e)}", exc_info=True)
+        db.session.rollback()
+        emit('error', {'message': 'Failed to save message'})
+        return
 
-        # 3. Process conversation context (handles summarization if needed)
-        logger.info("🧠 Processing conversation context...")
+    # Process conversation and call AI
+    try:
+        # 3. Process conversation context
         filtered_history, summarization_occurred = process_conversation_context(
             conversation,
             user_message,
             db.session
         )
         
-        if summarization_occurred:
-            logger.info("✨ Conversation was summarized to save tokens")
-        
-        # 4. Gather full history for message list (used for latest message extraction)
+        # 4. Gather full history
         history = Message.query.filter_by(conversation_id=conversation.id)\
             .order_by(Message.timestamp.asc()).all()
         messages = [{"role": m.sender if m.sender != "bot" else "assistant", "content": m.text} for m in history]
-        logger.debug(f"✅ Loaded {len(messages)} messages from history\n")
         
-        # 5. Determine if we should send time and name context
+        # 5. Determine context info
         send_time, send_name, time_of_day = should_send_context_info(history)
         
-        # 6. Call LLM with filtered context (includes memory summary + recent messages)
-        logger.info("🤖 Calling Keji AI with context-aware history...")
+        # 6. Call AI
+        logger.info("Processing with AI...")
         bot_reply = call_llm(
             messages,
             user_name=current_user.name if send_name else None,
             conversation_history=filtered_history,
             time_of_day=time_of_day if send_time else None
         )
-        logger.info("✅ Received response from Keji AI\n")
+        logger.info("AI response received")
 
-        # 7. Decide how to handle response
-        logger.debug("🔀 Determining response type...")
+    except Exception as e:
+        logger.error(f"Error processing with AI: {str(e)}", exc_info=True)
+        # Send fallback error message to client
+        emit('receive_message', {
+            'type': 'chat',
+            'role': 'assistant',
+            'content': 'Omo, something don happen for my side. Abeg try again? I dey here to help you!',
+            'message_id': None,
+            'timestamp': datetime.now().isoformat()
+        })
+        return
+
+    # Save and send response
+    try:
+        # 7. Handle response
         if isinstance(bot_reply, dict) and bot_reply.get("type") == "recommendation":
             # Don't save to DB yet, wait for user acceptance
-            logger.info("📌 Response type: RECOMMENDATION (not saving to DB yet)")
-            logger.info(f"   Title: {bot_reply.get('title', 'N/A')}")
-            logger.info(f"   Health benefits: {len(bot_reply.get('health', []))}")
-            
-            # Send recommendation to client
-            logger.debug(f"📤 Emitting recommendation to client: {bot_reply.get('title')}")
+            logger.info(f"Recommendation: {bot_reply.get('title', 'N/A')}")
             emit('receive_recommendation', bot_reply)
-            logger.debug("✅ Recommendation emitted successfully")
             
         else:
             # Normal chat: save immediately
-            logger.info("💬 Response type: CHAT (saving to DB)")
-            reply_text = bot_reply["content"] if isinstance(bot_reply, dict) else str(bot_reply)
-            logger.debug(f"   Reply length: {len(reply_text)} characters")
+            reply_text = bot_reply.get("content") if isinstance(bot_reply, dict) else str(bot_reply)
+            
+            if not reply_text:
+                logger.warning("Empty reply from AI, using fallback")
+                reply_text = "Yeah, how can I help you?"
             
             bot_msg = Message(conversation_id=conversation.id, sender="bot", text=reply_text)
             db.session.add(bot_msg)
             db.session.commit()
-            
-            logger.info(f"✅ Chat completed successfully. Bot reply saved.")
             
             # Send message to client
             message_data = {
@@ -289,18 +339,24 @@ def handle_send_message(data):
                 'message_id': bot_msg.id,
                 'timestamp': bot_msg.timestamp.isoformat()
             }
-            logger.debug(f"📤 Emitting chat message to client: {len(reply_text)} chars")
             emit('receive_message', message_data)
-            logger.debug("✅ Message emitted successfully")
-        
-        logger.info("🔵 "*30 + "\n")
+            logger.info("Message sent to client")
         
     except Exception as e:
-        logger.error(f"Error processing message: {str(e)}", exc_info=True)
-        emit('error', {
-            'message': 'Failed to process message',
-            'details': str(e)
-        })
+        logger.error(f"Error saving/sending response: {str(e)}", exc_info=True)
+        db.session.rollback()
+        # Still try to send the message even if save failed
+        try:
+            reply_text = bot_reply.get("content", "Yeah, how can I help you?") if isinstance(bot_reply, dict) else str(bot_reply)
+            emit('receive_message', {
+                'type': 'chat',
+                'role': 'assistant',
+                'content': reply_text,
+                'message_id': None,
+                'timestamp': datetime.now().isoformat()
+            })
+        except:
+            emit('error', {'message': 'Failed to process message'})
 
 
 @socketio.on('accept_recommendation')
@@ -314,37 +370,42 @@ def handle_accept_recommendation(data):
         'content': str
     }
     """
-    if not current_user.is_authenticated:
-        emit('error', {'message': 'Not authenticated'})
+    try:
+        # Validate authentication
+        if not current_user.is_authenticated:
+            emit('error', {'message': 'Not authenticated'})
+            return
+        
+        # Validate data
+        if not data or not isinstance(data, dict):
+            emit('error', {'message': 'Invalid data format'})
+            return
+        
+        title = data.get("title")
+        content = data.get("content")
+        
+        if not title or not content:
+            emit('error', {'message': 'Missing title or content'})
+            return
+        
+        logger.info(f"Accepting recommendation: {title} (User: {current_user.name})")
+
+    except Exception as e:
+        logger.error(f"Error validating recommendation: {str(e)}", exc_info=True)
+        emit('error', {'message': 'Invalid request'})
         return
-    
-    logger.info("\n" + "🟢 "*30)
-    logger.info("✅ ACCEPT RECOMMENDATION (WebSocket)")
-    logger.info("🟢 "*30)
-    logger.info(f"👤 User: {current_user.name} (ID: {current_user.id})")
-    
-    title = data.get("title")
-    content = data.get("content")
-    
-    logger.info(f"📌 Recommendation: {title}")
-    logger.debug(f"   Content length: {len(content)} characters")
-    logger.info("\n")
 
     try:
         # Find latest conversation
-        logger.debug("🔍 Finding latest conversation...")
         conversation = Conversation.query.filter_by(user_id=current_user.id)\
             .order_by(Conversation.id.desc()).first()
         
         if not conversation:
-            logger.warning("⚠️  No conversation found!")
+            logger.warning("No conversation found for recommendation")
             emit('error', {'message': 'No conversation found'})
             return
 
-        logger.debug(f"✅ Found conversation (ID: {conversation.id})")
-
         # Save recommendation as a bot message
-        logger.debug("💾 Saving recommendation to database...")
         bot_msg = Message(
             conversation_id=conversation.id,
             sender="bot",
@@ -353,8 +414,7 @@ def handle_accept_recommendation(data):
         db.session.add(bot_msg)
         db.session.commit()
         
-        logger.info("✅ Recommendation saved successfully")
-        logger.info("🟢 "*30 + "\n")
+        logger.info("Recommendation saved to database")
 
         # Confirm to client
         emit('recommendation_saved', {
@@ -364,52 +424,39 @@ def handle_accept_recommendation(data):
         })
         
     except Exception as e:
-        logger.error(f"Error accepting recommendation: {str(e)}", exc_info=True)
-        emit('error', {
-            'message': 'Failed to save recommendation',
-            'details': str(e)
-        })
+        logger.error(f"Database error saving recommendation: {str(e)}", exc_info=True)
+        db.session.rollback()
+        emit('error', {'message': 'Failed to save recommendation'})
 
 
 @socketio.on('request_history')
 def handle_request_history():
     """Send chat history to client"""
-    if not current_user.is_authenticated:
-        emit('error', {'message': 'Not authenticated'})
+    try:
+        # Validate authentication
+        if not current_user.is_authenticated:
+            emit('error', {'message': 'Not authenticated'})
+            return
+        
+        logger.info(f"Chat history requested by {current_user.name} (ID: {current_user.id})")
+        
+    except Exception as e:
+        logger.error(f"Error validating history request: {str(e)}", exc_info=True)
+        emit('error', {'message': 'Invalid request'})
         return
-    
-    logger.info("\n" + "🟡 "*30)
-    logger.info("📖 CHAT HISTORY REQUEST (WebSocket)")
-    logger.info("🟡 "*30)
-    logger.info(f"👤 User: {current_user.name} (ID: {current_user.id})")
-    logger.info("\n")
     
     try:
         # Get latest conversation for this user
-        logger.debug("🔍 Finding latest conversation...")
         conversation = Conversation.query.filter_by(user_id=current_user.id)\
             .order_by(Conversation.id.desc()).first()
 
         if not conversation:
-            logger.warning(f"⚠️  No conversation found for user {current_user.id}")
             emit('chat_history', {'messages': []})
-            logger.info("🟡 "*30 + "\n")
             return
-
-        logger.debug(f"✅ Found conversation (ID: {conversation.id})")
         
-        # Get full history using context manager (ensures consistency)
+        # Get full history using context manager
         full_history = get_full_history_for_frontend(conversation.id)
-        
-        logger.info(f"✅ Retrieved {len(full_history)} messages for frontend")
-        logger.debug(f"   User messages: {sum(1 for m in full_history if m['sender'] == 'user')}")
-        logger.debug(f"   Bot messages: {sum(1 for m in full_history if m['sender'] == 'bot')}")
-        
-        # Log memory summary status
-        if conversation.memory_summary:
-            logger.info(f"💭 Memory summary exists ({conversation.pruned_count} messages summarized)")
-        
-        logger.info("🟡 "*30 + "\n")
+        logger.info(f"Retrieved {len(full_history)} messages")
 
         # Send history to client
         emit('chat_history', {
@@ -419,9 +466,7 @@ def handle_request_history():
         })
         
     except Exception as e:
-        logger.error(f"Error retrieving history: {str(e)}", exc_info=True)
-        emit('error', {
-            'message': 'Failed to retrieve history',
-            'details': str(e)
-        })
+        logger.error(f"Database error retrieving history: {str(e)}", exc_info=True)
+        # Send empty history on error to prevent frontend from hanging
+        emit('chat_history', {'messages': [], 'error': 'Failed to retrieve history'})
 

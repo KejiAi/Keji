@@ -3,12 +3,16 @@ Gunicorn configuration file for production deployment with Eventlet workers.
 
 This config ensures eventlet monkey patching happens ONLY in worker processes,
 not in the Gunicorn master/arbiter process.
+
+Compatible with: Heroku, Render, AWS, GCP, and other cloud platforms.
 """
 
 import multiprocessing
+import os
 
-# Server socket
-bind = "0.0.0.0:5000"
+# Server socket - bind to PORT env variable (Render, Heroku, etc.)
+port = os.environ.get("PORT", "5000")
+bind = f"0.0.0.0:{port}"
 backlog = 2048
 
 # Worker processes
@@ -49,17 +53,17 @@ def post_fork(server, worker):
     """
     import eventlet
     eventlet.monkey_patch()
-    server.log.info("Eventlet monkey patched in worker process %s", worker.pid)
+    server.log.info("Eventlet initialized in worker process %s", worker.pid)
 
 
 def when_ready(server):
     """Called just after the server is started."""
-    server.log.info("Keji AI Backend server is ready. Spawning workers")
+    server.log.info("Server ready - spawning workers")
 
 
 def on_starting(server):
     """Called just before the master process is initialized."""
-    server.log.info("Starting Keji AI Backend with Eventlet workers")
+    server.log.info("Starting server with Eventlet workers")
 
 
 def worker_int(worker):

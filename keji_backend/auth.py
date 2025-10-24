@@ -1,5 +1,5 @@
-from flask import Blueprint, request, jsonify, session, make_response, redirect
-from app import db, mail, app
+from flask import Blueprint, request, jsonify, session, make_response, redirect, current_app
+from extensions import db, mail
 import string
 from models import User
 from flask_login import login_user, logout_user, login_required, current_user
@@ -294,21 +294,21 @@ def logout():
     # Clear remember token cookie with same settings as when it was set
     response.set_cookie(
         "remember_token", "", expires=0,
-        path=app.config.get("REMEMBER_COOKIE_PATH", "/"),
-        samesite=app.config.get("REMEMBER_COOKIE_SAMESITE", "Lax"),
-        secure=app.config.get("REMEMBER_COOKIE_SECURE", False),
-        httponly=app.config.get("REMEMBER_COOKIE_HTTPONLY", True),
-        domain=app.config.get("REMEMBER_COOKIE_DOMAIN", None),
+        path=current_app.config.get("REMEMBER_COOKIE_PATH", "/"),
+        samesite=current_app.config.get("REMEMBER_COOKIE_SAMESITE", "Lax"),
+        secure=current_app.config.get("REMEMBER_COOKIE_SECURE", False),
+        httponly=current_app.config.get("REMEMBER_COOKIE_HTTPONLY", True),
+        domain=current_app.config.get("REMEMBER_COOKIE_DOMAIN", None),
     )
 
     # Clear session cookie (in case it exists)
     response.set_cookie(
-        app.config.get("SESSION_COOKIE_NAME", "session"), "", expires=0,
-        path=app.config.get("SESSION_COOKIE_PATH", "/"),
-        samesite=app.config.get("SESSION_COOKIE_SAMESITE", "Lax"),
-        secure=app.config.get("SESSION_COOKIE_SECURE", False),
-        httponly=app.config.get("SESSION_COOKIE_HTTPONLY", True),
-        domain=app.config.get("SESSION_COOKIE_DOMAIN", None),
+        current_app.config.get("SESSION_COOKIE_NAME", "session"), "", expires=0,
+        path=current_app.config.get("SESSION_COOKIE_PATH", "/"),
+        samesite=current_app.config.get("SESSION_COOKIE_SAMESITE", "Lax"),
+        secure=current_app.config.get("SESSION_COOKIE_SECURE", False),
+        httponly=current_app.config.get("SESSION_COOKIE_HTTPONLY", True),
+        domain=current_app.config.get("SESSION_COOKIE_DOMAIN", None),
     )
 
     logger.info(f"User logged out: {user_name}")

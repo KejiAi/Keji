@@ -74,7 +74,7 @@ def generate_summary(messages: List[Dict[str, str]], existing_summary: Optional[
     Returns:
         str: Concise summary of the conversation
     """
-    logger.info("🔄 Generating conversation summary...")
+    logger.info("Generating conversation summary...")
     logger.debug(f"Summarizing {len(messages)} messages")
     
     # Build conversation text
@@ -127,13 +127,13 @@ Summary:"""
         )
         
         summary = response.choices[0].message.content.strip()
-        logger.info(f"✅ Summary generated ({count_tokens(summary)} tokens)")
+        logger.info(f"Summary generated ({count_tokens(summary)} tokens)")
         logger.debug(f"Summary preview: {summary[:100]}...")
         
         return summary
         
     except Exception as e:
-        logger.error(f"❌ Error generating summary: {e}")
+        logger.error(f"Error generating summary: {e}")
         # Fallback: create basic summary
         return f"Conversation covering {len(messages)} messages about food recommendations and dietary preferences."
 
@@ -160,10 +160,9 @@ def should_summarize(
     should_trigger = total > threshold
     
     if should_trigger:
-        logger.warning(f"⚠️  Token threshold exceeded: {total} > {threshold}")
-        logger.info("🔄 Summarization will be triggered")
+        logger.warning(f"Token threshold exceeded: {total} > {threshold}, summarization needed")
     else:
-        logger.debug(f"✅ Token count within limits: {total} / {threshold}")
+        logger.debug(f"Token count within limits: {total}/{threshold}")
     
     return should_trigger
 
@@ -195,13 +194,13 @@ def filter_messages_for_llm(
             "role": "system",
             "content": f"CONVERSATION CONTEXT (Summary of earlier messages):\n{memory_summary}"
         })
-        logger.debug(f"✅ Added memory summary ({count_tokens(memory_summary)} tokens)")
+        logger.debug(f"Added memory summary ({count_tokens(memory_summary)} tokens)")
     
     # Add recent N messages
     recent_messages = all_messages[-recent_count:] if len(all_messages) > recent_count else all_messages
     filtered.extend(recent_messages)
     
-    logger.info(f"✅ Filtered to {len(filtered)} messages (summary: {1 if memory_summary else 0}, recent: {len(recent_messages)})")
+    logger.info(f"Filtered to {len(filtered)} messages (summary: {1 if memory_summary else 0}, recent: {len(recent_messages)})")
     logger.debug(f"   Total tokens: {count_messages_tokens(filtered)}")
     
     return filtered
@@ -223,9 +222,7 @@ def process_conversation_context(
     Returns:
         Tuple of (filtered_messages_for_llm, summarization_occurred)
     """
-    logger.info("\n" + "="*60)
-    logger.info("🧠 PROCESSING CONVERSATION CONTEXT")
-    logger.info("="*60)
+    logger.info("Processing conversation context")
     
     # Get all messages from database
     from models import Message
@@ -238,9 +235,9 @@ def process_conversation_context(
         for msg in all_messages
     ]
     
-    logger.info(f"📊 Total messages in history: {len(message_dicts)}")
-    logger.info(f"📝 Existing summary: {'Yes' if conversation.memory_summary else 'No'}")
-    logger.info(f"✂️  Previously summarized: {conversation.pruned_count} messages")
+    logger.info(f"Total messages in history: {len(message_dicts)}")
+    if conversation.memory_summary:
+        logger.info(f"Existing summary: {conversation.pruned_count} messages")
     
     # Calculate tokens
     history_tokens = count_messages_tokens(message_dicts)
@@ -256,13 +253,13 @@ def process_conversation_context(
     # Check if summarization is needed
     summarization_occurred = False
     if should_summarize(history_tokens, summary_tokens, new_message_tokens):
-        logger.info("\n🔄 TRIGGERING SUMMARIZATION...")
+        logger.info("Triggering summarization...")
         
         # Determine which messages to summarize
         # Keep recent messages, summarize older ones
         if len(message_dicts) > RECENT_MESSAGES_COUNT:
             messages_to_summarize = message_dicts[:-RECENT_MESSAGES_COUNT]
-            logger.info(f"📦 Summarizing {len(messages_to_summarize)} older messages")
+            logger.info(f"Summarizing {len(messages_to_summarize)} older messages")
             
             # Generate new summary
             new_summary = generate_summary(
@@ -276,11 +273,11 @@ def process_conversation_context(
             conversation.last_summary_at = datetime.now()
             db_session.commit()
             
-            logger.info(f"✅ Summary updated: {conversation.pruned_count} messages compressed")
+            logger.info(f"Summary updated: {conversation.pruned_count} messages compressed")
             logger.info(f"   Summary size: {count_tokens(new_summary)} tokens")
             summarization_occurred = True
         else:
-            logger.warning("⚠️  Not enough messages to summarize (keeping all recent)")
+            logger.warning("Not enough messages to summarize, keeping all recent")
     
     # Filter messages for LLM
     filtered_messages = filter_messages_for_llm(
@@ -310,7 +307,7 @@ def get_full_history_for_frontend(conversation_id: int) -> List[Dict[str, str]]:
     messages = Message.query.filter_by(conversation_id=conversation_id)\
         .order_by(Message.timestamp.asc()).all()
     
-    logger.debug(f"📖 Retrieved {len(messages)} messages for frontend")
+    logger.debug(f"Retrieved {len(messages)} messages for frontend")
     
     return [
         {

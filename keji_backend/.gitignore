@@ -7,4 +7,9 @@ __pycache__
 **/*.env
 
 
+**/*.md**/.env*
+**/.env
+.env*
+
 **/*.md
+*.md

@@ -1,3 +1,6 @@
+import eventlet
+eventlet.monkey_patch()
+
 from flask import Flask, jsonify, request
 from flask_sqlalchemy import SQLAlchemy
 from flask_migrate import Migrate
@@ -8,6 +11,7 @@ from flask_socketio import SocketIO
 from dotenv import load_dotenv
 import os
 import logging
+
 
 # Load env
 load_dotenv()
@@ -33,7 +37,7 @@ CORS(app,
 socketio = SocketIO(
     app, 
     cors_allowed_origins=[FRONTEND_BASE_URL, FRONTEND_URL_LAN],
-    async_mode='threading',
+    async_mode='eventlet',
     logger=True,
     engineio_logger=True,
     cookie='session',  # Use Flask session cookie

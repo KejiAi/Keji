@@ -52,8 +52,7 @@ def post_fork(server, worker):
     This is the CORRECT place to monkey patch for eventlet.
     """
     import eventlet
-    # Don't patch ssl - causes issues with httpx/openai in Python 3.13
-    eventlet.monkey_patch(all=False, socket=True, select=True, thread=True, time=True, ssl=False)
+    eventlet.monkey_patch()
     server.log.info("Eventlet initialized in worker process %s", worker.pid)
 
 

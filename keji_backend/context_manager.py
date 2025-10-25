@@ -14,18 +14,17 @@ from datetime import datetime
 from openai import OpenAI
 import json
 from typing import List, Dict, Optional, Tuple
-import httpx
 
 logger = logging.getLogger(__name__)
-
-# Initialize OpenAI client with custom httpx to bypass eventlet SSL issues
-http_client = httpx.Client(timeout=60.0)
-client = OpenAI(http_client=http_client)
 
 def _openai_in_thread(func):
     """Wrapper to run OpenAI calls in real threads (bypasses eventlet SSL)"""
     import eventlet.tpool
     return eventlet.tpool.execute(func)
+
+def _get_openai_client():
+    """Create OpenAI client in thread context (fresh SSL, no eventlet patch)"""
+    return OpenAI()
 
 # Configuration
 TOKEN_THRESHOLD = 3000  # When to trigger summarization (leave room for response)
@@ -136,7 +135,8 @@ Summary:"""
     
     try:
         def _call():
-            """Run in real thread"""
+            """Run in real thread with fresh OpenAI client"""
+            client = _get_openai_client()
             return client.chat.completions.create(
                 model=MODEL_FOR_SUMMARY,
                 messages=[

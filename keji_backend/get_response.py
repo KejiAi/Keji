@@ -3,7 +3,6 @@ from dotenv import load_dotenv
 from openai import OpenAI
 import json
 import logging
-import httpx
 
 # Configure logging
 logging.basicConfig(
@@ -16,16 +15,16 @@ load_dotenv()
 food_data_path = os.path.join(os.path.dirname(__file__), 'foods.json')
 keji_prompt_path = os.path.join(os.path.dirname(__file__), 'keji_prompt.txt')
 
-# Create OpenAI client with custom httpx client to bypass eventlet SSL issues
-http_client = httpx.Client(timeout=60.0)
-client = OpenAI(http_client=http_client)
-
 logger.info("Keji AI Response Module initialized")
 
 def _openai_in_thread(func):
     """Wrapper to run OpenAI calls in real threads (bypasses eventlet SSL)"""
     import eventlet.tpool
     return eventlet.tpool.execute(func)
+
+def _get_openai_client():
+    """Create OpenAI client in thread context (fresh SSL, no eventlet patch)"""
+    return OpenAI()
 
 def classify_llm(prompt, conversation_history=None):
     """
@@ -60,7 +59,8 @@ def classify_llm(prompt, conversation_history=None):
     logger.debug(f"Classification context: {len(messages)} messages")
     
     def _call():
-        """Run in real thread"""
+        """Run in real thread with fresh OpenAI client"""
+        client = _get_openai_client()
         return client.chat.completions.create(
             model="gpt-4o-mini",
             messages=messages
@@ -134,7 +134,8 @@ def call_llm(prompt, keji_prompt_path=None, user_name=None, additional_context=N
     logger.debug(f"Total context messages: {len(messages)}")
 
     def _call():
-        """Run in real thread"""
+        """Run in real thread with fresh OpenAI client"""
+        client = _get_openai_client()
         return client.chat.completions.create(
             model="gpt-5",
             messages=messages

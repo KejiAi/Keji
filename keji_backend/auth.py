@@ -130,7 +130,7 @@ def verify_link(token):
     db.session.commit()
     logger.info(f"Email verified successfully for user: {email} (ID: {user.id})")
 
-    return redirect(f"{os.getenv("FRONTEND_BASE_URL")}/start?mode=login")  # adjust for your frontend
+    return redirect(f"{os.getenv('FRONTEND_BASE_URL')}/start?mode=login")  # adjust for your frontend
 
 
 # ✅ VERIFY BY CODE
@@ -370,8 +370,10 @@ scheduler = BackgroundScheduler()
 
 @scheduler.scheduled_job("interval", hours=1)
 def cleanup_job():
-    logger.info("Scheduled cleanup job started")
-    deleted = delete_expired_unverified_users()
-    logger.info(f"Scheduled cleanup completed: {deleted} expired unverified users deleted")
+    from flask import current_app
+    with current_app.app_context():
+        logger.info("Scheduled cleanup job started")
+        deleted = delete_expired_unverified_users()
+        logger.info(f"Scheduled cleanup completed: {deleted} expired unverified users deleted")
 
 scheduler.start()

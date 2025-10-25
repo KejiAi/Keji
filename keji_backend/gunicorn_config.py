@@ -52,7 +52,7 @@ def post_fork(server, worker):
     This is the CORRECT place to monkey patch for eventlet.
     """
     import eventlet
-    eventlet.monkey_patch()
+    eventlet.monkey_patch(all=True, thread=True, socket=True)
     server.log.info("Eventlet initialized in worker process %s", worker.pid)
 
 

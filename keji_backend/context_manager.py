@@ -38,12 +38,19 @@ def count_tokens(text: str, model: str = "gpt-4") -> int:
         int: Number of tokens
     """
     try:
+        # Ensure text is a string
+        if not isinstance(text, str):
+            text = str(text)
+        
         encoding = tiktoken.encoding_for_model(model)
         return len(encoding.encode(text))
     except Exception as e:
         logger.error(f"Error counting tokens: {e}")
         # Fallback: rough estimate (1 token ≈ 4 characters)
-        return len(text) // 4
+        try:
+            return len(str(text)) // 4
+        except:
+            return 0
 
 
 def count_messages_tokens(messages: List[Dict[str, str]]) -> int:

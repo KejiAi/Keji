@@ -14,11 +14,13 @@ from datetime import datetime
 from openai import OpenAI
 import json
 from typing import List, Dict, Optional, Tuple
+import httpx
 
 logger = logging.getLogger(__name__)
 
-# Initialize OpenAI client
-client = OpenAI()
+# Initialize OpenAI client with custom httpx to bypass eventlet SSL issues
+http_client = httpx.Client(timeout=60.0)
+client = OpenAI(http_client=http_client)
 
 # Configuration
 TOKEN_THRESHOLD = 3000  # When to trigger summarization (leave room for response)

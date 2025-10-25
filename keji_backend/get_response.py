@@ -3,6 +3,7 @@ from dotenv import load_dotenv
 from openai import OpenAI
 import json
 import logging
+import httpx
 
 # Configure logging
 logging.basicConfig(
@@ -15,7 +16,9 @@ load_dotenv()
 food_data_path = os.path.join(os.path.dirname(__file__), 'foods.json')
 keji_prompt_path = os.path.join(os.path.dirname(__file__), 'keji_prompt.txt')
 
-client = OpenAI()
+# Create OpenAI client with custom httpx client to bypass eventlet SSL issues
+http_client = httpx.Client(timeout=60.0)
+client = OpenAI(http_client=http_client)
 
 logger.info("Keji AI Response Module initialized")
 

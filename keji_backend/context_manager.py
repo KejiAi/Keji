@@ -22,6 +22,11 @@ logger = logging.getLogger(__name__)
 http_client = httpx.Client(timeout=60.0)
 client = OpenAI(http_client=http_client)
 
+def _openai_in_thread(func):
+    """Wrapper to run OpenAI calls in real threads (bypasses eventlet SSL)"""
+    import eventlet.tpool
+    return eventlet.tpool.execute(func)
+
 # Configuration
 TOKEN_THRESHOLD = 3000  # When to trigger summarization (leave room for response)
 RECENT_MESSAGES_COUNT = 10  # Number of recent messages to include (5 user + 5 bot turns)
@@ -130,16 +135,19 @@ Create a brief summary that:
 Summary:"""
     
     try:
-        response = client.chat.completions.create(
-            model=MODEL_FOR_SUMMARY,
-            messages=[
-                {"role": "system", "content": "You are a helpful assistant that creates concise conversation summaries."},
-                {"role": "user", "content": summary_prompt}
-            ],
-            temperature=0.3,  # Lower temperature for more focused summaries
-            max_tokens=300
-        )
+        def _call():
+            """Run in real thread"""
+            return client.chat.completions.create(
+                model=MODEL_FOR_SUMMARY,
+                messages=[
+                    {"role": "system", "content": "You are a helpful assistant that creates concise conversation summaries."},
+                    {"role": "user", "content": summary_prompt}
+                ],
+                temperature=0.3,  # Lower temperature for more focused summaries
+                max_tokens=300
+            )
         
+        response = _openai_in_thread(_call)
         summary = response.choices[0].message.content.strip()
         logger.info(f"Summary generated ({count_tokens(summary)} tokens)")
         logger.debug(f"Summary preview: {summary[:100]}...")

@@ -22,6 +22,11 @@ client = OpenAI(http_client=http_client)
 
 logger.info("Keji AI Response Module initialized")
 
+def _openai_in_thread(func):
+    """Wrapper to run OpenAI calls in real threads (bypasses eventlet SSL)"""
+    import eventlet.tpool
+    return eventlet.tpool.execute(func)
+
 def classify_llm(prompt, conversation_history=None):
     """
     Classify user intent with conversation context.
@@ -54,11 +59,14 @@ def classify_llm(prompt, conversation_history=None):
     
     logger.debug(f"Classification context: {len(messages)} messages")
     
-    response = client.chat.completions.create(
-        model="gpt-4o-mini",
-        messages=messages
-    )
+    def _call():
+        """Run in real thread"""
+        return client.chat.completions.create(
+            model="gpt-4o-mini",
+            messages=messages
+        )
     
+    response = _openai_in_thread(_call)
     result = response.choices[0].message.content
     logger.debug(f"Classification complete: {len(result)} chars")
     logger.debug("\n")
@@ -125,11 +133,14 @@ def call_llm(prompt, keji_prompt_path=None, user_name=None, additional_context=N
     
     logger.debug(f"Total context messages: {len(messages)}")
 
-    response = client.chat.completions.create(
-        model="gpt-5",
-        messages=messages
-    )
+    def _call():
+        """Run in real thread"""
+        return client.chat.completions.create(
+            model="gpt-5",
+            messages=messages
+        )
     
+    response = _openai_in_thread(_call)
     result = response.choices[0].message.content.strip()
     logger.debug(f"LLM response: {len(result)} chars")
     logger.debug("\n")

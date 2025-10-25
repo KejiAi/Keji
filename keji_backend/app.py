@@ -158,9 +158,40 @@ def root():
             'health': '/health',
             'chat': '/api/chat',
             'auth': '/api/auth',
-            'websocket': 'WebSocket connection available'
+            'websocket': 'WebSocket connection available',
+            'test_openai': '/test-openai'
         }
     }), 200
+
+# Test route for OpenAI
+@app.route('/test-openai')
+def test_openai():
+    """Test OpenAI connection using thread pool"""
+    import eventlet.tpool
+    from openai import OpenAI
+    
+    def call_openai():
+        """Run in real thread, bypassing eventlet's monkey patch"""
+        client = OpenAI()
+        response = client.chat.completions.create(
+            model="gpt-4o-mini",
+            messages=[{"role": "user", "content": "Say 'Hello from Keji!'"}]
+        )
+        return response.choices[0].message.content
+    
+    try:
+        # Execute in thread pool (real thread, no eventlet SSL issues)
+        result = eventlet.tpool.execute(call_openai)
+        return jsonify({
+            'status': 'success',
+            'message': result,
+            'method': 'eventlet.tpool (real thread)'
+        }), 200
+    except Exception as e:
+        return jsonify({
+            'status': 'error',
+            'message': str(e)
+        }), 500
 
 # Health check endpoint for Render and monitoring
 @app.route('/health')

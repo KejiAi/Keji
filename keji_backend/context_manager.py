@@ -26,6 +26,9 @@ RECENT_MESSAGES_COUNT = 10  # Number of recent messages to include (5 user + 5 b
 MODEL_FOR_SUMMARY = "gpt-4o-mini"  # Cheaper model for summarization
 MODEL_FOR_CHAT = "gpt-5"  # Main model for chat
 
+# Cache encoding to avoid recreating
+_encoding_cache = {}
+
 def count_tokens(text: str, model: str = "gpt-4") -> int:
     """
     Count the number of tokens in a text string.
@@ -37,20 +40,34 @@ def count_tokens(text: str, model: str = "gpt-4") -> int:
     Returns:
         int: Number of tokens
     """
-    try:
-        # Ensure text is a string
-        if not isinstance(text, str):
-            text = str(text)
-        
-        encoding = tiktoken.encoding_for_model(model)
-        return len(encoding.encode(text))
-    except Exception as e:
-        logger.error(f"Error counting tokens: {e}")
-        # Fallback: rough estimate (1 token ≈ 4 characters)
+    # Handle None and empty
+    if text is None:
+        return 0
+    
+    # Ensure it's a string
+    if not isinstance(text, str):
         try:
-            return len(str(text)) // 4
-        except:
-            return 0
+            text = str(text)
+        except Exception as e:
+            logger.warning(f"Cannot convert to string: {type(text)} - {e}")
+            return 100
+    
+    if not text:
+        return 0
+    
+    try:
+        # Use cached encoding
+        if model not in _encoding_cache:
+            _encoding_cache[model] = tiktoken.encoding_for_model(model)
+        
+        encoding = _encoding_cache[model]
+        return len(encoding.encode(text))
+        
+    except Exception as e:
+        # Log the actual error for debugging
+        logger.warning(f"Token counting failed (using estimate): {str(e)[:100]}")
+        # Use character-based estimate (more conservative: 3 chars per token)
+        return max(len(text) // 3, 1)
 
 
 def count_messages_tokens(messages: List[Dict[str, str]]) -> int:

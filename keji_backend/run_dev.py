@@ -13,7 +13,16 @@ For production, use:
 
 # CRITICAL: Monkey patch MUST be the very first thing!
 import eventlet
-eventlet.monkey_patch()
+# Patch only what we need (socket, select, thread, time)
+# Don't patch SSL to avoid recursion errors with OpenAI and Resend
+eventlet.monkey_patch(
+    socket=True,
+    select=True,
+    thread=True,
+    time=True,
+    os=False,
+    psycopg=False
+)
 
 # Now it's safe to import everything else
 import os

@@ -50,10 +50,24 @@ def post_fork(server, worker):
     """
     Called just after a worker has been forked.
     This is the CORRECT place to monkey patch for eventlet.
+    
+    We patch ONLY socket/select/thread/time (not SSL) because:
+    - All SSL operations (OpenAI, Resend) use thread pools with standard SSL
+    - WebSocket doesn't need SSL patching (handled by load balancer)
+    - This avoids SSL recursion errors with requests/urllib3
     """
     import eventlet
-    eventlet.monkey_patch()
-    server.log.info("Eventlet initialized in worker process %s", worker.pid)
+    # Patch only the modules we need (socket, select, thread, time)
+    # Don't patch ssl, os, psycopg, builtins
+    eventlet.monkey_patch(
+        socket=True,
+        select=True,
+        thread=True,
+        time=True,
+        os=False,
+        psycopg=False
+    )
+    server.log.info("Eventlet initialized in worker process %s (socket/select/thread/time patched, SSL untouched)", worker.pid)
 
 
 def when_ready(server):

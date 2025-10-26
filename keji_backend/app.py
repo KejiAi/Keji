@@ -10,7 +10,7 @@ import logging
 load_dotenv()
 
 # Import extensions
-from extensions import db, migrate, login_manager, mail, socketio
+from extensions import db, migrate, login_manager, socketio
 
 app = Flask(__name__)
 
@@ -88,8 +88,6 @@ db.init_app(app)
 migrate.init_app(app, db)
 login_manager.init_app(app)
 login_manager.login_view = "login"
-mail.init_app(app)
-
 # Initialize SocketIO with app and configuration
 socketio.init_app(
     app, 

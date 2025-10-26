@@ -1,5 +1,5 @@
 from flask import Blueprint, request, jsonify, session, make_response, redirect, current_app
-from extensions import db, mail
+from extensions import db
 import string
 from models import User
 from flask_login import login_user, logout_user, login_required, current_user
@@ -9,7 +9,7 @@ from itsdangerous import URLSafeTimedSerializer, SignatureExpired, BadSignature
 import os
 from dotenv import load_dotenv
 from datetime import datetime, timedelta
-from flask_mail import Message
+import resend
 
 
 load_dotenv()
@@ -18,6 +18,41 @@ logger = logging.getLogger(__name__)
 
 auth_bp = Blueprint("auth", __name__)
 serializer = URLSafeTimedSerializer(os.getenv('SECRET_KEY'))
+
+# Configure Resend
+resend.api_key = os.getenv("RESEND_API_KEY")
+RESEND_FROM_EMAIL = os.getenv("RESEND_FROM_EMAIL", "noreply@yourdomain.com")
+
+def send_email(to_email, subject, html_content, text_content=None):
+    """
+    Send email using Resend API
+    
+    Args:
+        to_email: Recipient email address
+        subject: Email subject
+        html_content: HTML email body
+        text_content: Plain text fallback (optional)
+    
+    Returns:
+        bool: True if sent successfully, False otherwise
+    """
+    try:
+        params = {
+            "from": RESEND_FROM_EMAIL,
+            "to": [to_email],
+            "subject": subject,
+            "html": html_content,
+        }
+        
+        if text_content:
+            params["text"] = text_content
+        
+        response = resend.Emails.send(params)
+        logger.info(f"Email sent successfully to {to_email} via Resend (ID: {response.get('id')})")
+        return True
+    except Exception as e:
+        logger.error(f"Failed to send email to {to_email} via Resend: {str(e)}", exc_info=True)
+        return False
 
 def get_greeting():
     hour = datetime.now().hour
@@ -80,12 +115,8 @@ def signup():
     verify_link = f"{os.getenv('BACKEND_URL_LOCAL')}/verify-email/{token}"
     logger.debug(f"verify link generated: {verify_link}")
 
-    # email service
-    msg = Message(
-        subject="Verify your account",
-        recipients=[email]
-    )
-    msg.body = f"""
+    # Send verification email via Resend
+    text_content = f"""
 Hi {name},
 
 Thanks for signing up! Please verify your account.
@@ -97,13 +128,61 @@ Or enter this code: {code}
 This link/code will expire in 1 hour.
 
 Cheers,
-Your App Team
+Keji AI Team
 """
-    try:
-        mail.send(msg)
-        logger.info(f"Verification email sent successfully to {email}")
-    except Exception as e:
-        logger.error(f"Failed to send verification email to {email}: {str(e)}")
+    
+    html_content = f"""
+<!DOCTYPE html>
+<html>
+<head>
+    <style>
+        body {{ font-family: Arial, sans-serif; line-height: 1.6; color: #333; }}
+        .container {{ max-width: 600px; margin: 0 auto; padding: 20px; }}
+        .button {{ 
+            display: inline-block; 
+            padding: 12px 24px; 
+            background-color: #4CAF50; 
+            color: white; 
+            text-decoration: none; 
+            border-radius: 5px; 
+            margin: 20px 0;
+        }}
+        .code {{ 
+            font-size: 24px; 
+            font-weight: bold; 
+            letter-spacing: 3px; 
+            padding: 15px; 
+            background-color: #f5f5f5; 
+            border-radius: 5px; 
+            display: inline-block;
+            margin: 10px 0;
+        }}
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h2>Welcome to Keji AI, {name}! 🎉</h2>
+        <p>Thanks for signing up! Please verify your account to get started.</p>
+        
+        <p><strong>Option 1:</strong> Click the button below</p>
+        <a href="{verify_link}" class="button">Verify My Account</a>
+        
+        <p><strong>Option 2:</strong> Enter this code in the app</p>
+        <div class="code">{code}</div>
+        
+        <p style="color: #666; font-size: 14px;">This link/code will expire in 1 hour.</p>
+        
+        <hr style="margin: 30px 0; border: none; border-top: 1px solid #eee;">
+        <p style="color: #999; font-size: 12px;">
+            If you didn't create this account, please ignore this email.
+        </p>
+    </div>
+</body>
+</html>
+"""
+    
+    if not send_email(email, "Verify your Keji AI account", html_content, text_content):
+        logger.error(f"Failed to send verification email to {email}")
         return jsonify({"error": "Failed to send verification email"}), 500
 
     return jsonify({"message": "User created. Verification email sent."}), 201
@@ -173,12 +252,43 @@ def resend_code():
     user.verification_code = code
     db.session.commit()
 
-    msg = Message(
-        subject="Your new verification code",
-        recipients=[email]
-    )
-    msg.body = f"Your new code is: {code}"
-    mail.send(msg)
+    # Send new verification code via Resend
+    text_content = f"Your new verification code is: {code}"
+    
+    html_content = f"""
+<!DOCTYPE html>
+<html>
+<head>
+    <style>
+        body {{ font-family: Arial, sans-serif; line-height: 1.6; color: #333; }}
+        .container {{ max-width: 600px; margin: 0 auto; padding: 20px; }}
+        .code {{ 
+            font-size: 28px; 
+            font-weight: bold; 
+            letter-spacing: 4px; 
+            padding: 20px; 
+            background-color: #f5f5f5; 
+            border-radius: 5px; 
+            display: inline-block;
+            margin: 20px 0;
+            color: #4CAF50;
+        }}
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h2>Your New Verification Code</h2>
+        <p>Here's your new verification code:</p>
+        <div class="code">{code}</div>
+        <p style="color: #666; font-size: 14px;">This code will expire in 1 hour.</p>
+    </div>
+</body>
+</html>
+"""
+    
+    if not send_email(email, "Your new verification code", html_content, text_content):
+        logger.error(f"Failed to send verification code to {email}")
+        return jsonify({"error": "Failed to send verification code"}), 500
 
     return jsonify({"message": "New code sent"}), 200
 
@@ -239,31 +349,75 @@ def forgot_password():
     db.session.commit()
     logger.info(f"Password reset successfully for user: {email} (ID: {user.id})")
 
-    # ✅ Friendly Email
-    msg = Message(
-        subject="🔑 Reset Your Password – We've Got You Covered!",
-        recipients=[email]
-    )
-    msg.body = f"""
-Hey {user.name} 👋,
+    # Send password reset email via Resend
+    text_content = f"""
+Hey {user.name},
 
-No stress – password resets happen to the best of us! 💪  
-Here's your brand new password:  
+No stress – password resets happen to the best of us!
+Here's your brand new password:
 
-👉  {temp_password}  
+{temp_password}
 
-You can continue using this password if you'd like ✅,  
-or update it anytime from your profile under **Change Password** for extra security 🔒.  
+You can continue using this password if you'd like,
+or update it anytime from your profile under Change Password for extra security.
 
-Stay awesome,  
-✨ Your App Team ✨
+Stay awesome,
+Keji AI Team
+"""
+    
+    html_content = f"""
+<!DOCTYPE html>
+<html>
+<head>
+    <style>
+        body {{ font-family: Arial, sans-serif; line-height: 1.6; color: #333; }}
+        .container {{ max-width: 600px; margin: 0 auto; padding: 20px; }}
+        .password-box {{ 
+            font-size: 20px; 
+            font-weight: bold; 
+            padding: 15px; 
+            background-color: #f5f5f5; 
+            border-left: 4px solid #4CAF50;
+            border-radius: 5px; 
+            margin: 20px 0;
+            font-family: 'Courier New', monospace;
+        }}
+        .tip {{ 
+            background-color: #E8F5E9; 
+            padding: 15px; 
+            border-radius: 5px; 
+            margin: 20px 0;
+        }}
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h2>Password Reset Successful 🔑</h2>
+        <p>Hey {user.name} 👋,</p>
+        <p>No stress – password resets happen to the best of us! 💪</p>
+        
+        <p>Here's your brand new password:</p>
+        <div class="password-box">{temp_password}</div>
+        
+        <div class="tip">
+            <strong>💡 Tip:</strong> You can continue using this password if you'd like ✅, 
+            or update it anytime from your profile under <strong>Change Password</strong> for extra security 🔒.
+        </div>
+        
+        <p>Stay awesome,<br>
+        <strong>Keji AI Team</strong> ✨</p>
+        
+        <hr style="margin: 30px 0; border: none; border-top: 1px solid #eee;">
+        <p style="color: #999; font-size: 12px;">
+            If you didn't request this password reset, please contact us immediately.
+        </p>
+    </div>
+</body>
+</html>
 """
 
-    try:
-        mail.send(msg)
-        logger.info(f"Password reset email sent successfully to {email}")
-    except Exception as e:
-        logger.error(f"Failed to send password reset email to {email}: {str(e)}")
+    if not send_email(email, "Reset Your Password – We've Got You Covered! 🔑", html_content, text_content):
+        logger.error(f"Failed to send password reset email to {email}")
         return jsonify({"error": "Failed to send password reset email"}), 500
 
     return jsonify({"message": "Password reset email sent successfully"}), 200

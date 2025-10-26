@@ -6,10 +6,9 @@ from flask_login import login_user, logout_user, login_required, current_user
 import logging
 import random
 from itsdangerous import URLSafeTimedSerializer, SignatureExpired, BadSignature
-import os
+import os, requests
 from dotenv import load_dotenv
 from datetime import datetime, timedelta
-import resend
 
 
 load_dotenv()
@@ -19,40 +18,62 @@ logger = logging.getLogger(__name__)
 auth_bp = Blueprint("auth", __name__)
 serializer = URLSafeTimedSerializer(os.getenv('SECRET_KEY'))
 
-# Configure Resend
-resend.api_key = os.getenv("RESEND_API_KEY")
-RESEND_FROM_EMAIL = os.getenv("RESEND_FROM_EMAIL", "noreply@yourdomain.com")
+# Configure Resend with requests to avoid ssl issues on render
+RESEND_API_KEY = os.getenv("RESEND_API_KEY")
+RESEND_FROM_EMAIL = os.getenv("RESEND_FROM_EMAIL")
 
 def send_email(to_email, subject, html_content, text_content=None):
     """
-    Send email using Resend API
-    
+    Send an email using the Resend REST API.
+
     Args:
-        to_email: Recipient email address
-        subject: Email subject
-        html_content: HTML email body
-        text_content: Plain text fallback (optional)
-    
+        to_email (str): Recipient email address
+        subject (str): Email subject
+        html_content (str): HTML email body
+        text_content (str, optional): Plain-text fallback
+
     Returns:
         bool: True if sent successfully, False otherwise
     """
-    try:
-        params = {
-            "from": RESEND_FROM_EMAIL,
-            "to": [to_email],
-            "subject": subject,
-            "html": html_content,
-        }
-        
-        if text_content:
-            params["text"] = text_content
-        
-        response = resend.Emails.send(params)
-        logger.info(f"Email sent successfully to {to_email} via Resend (ID: {response.get('id')})")
-        return True
-    except Exception as e:
-        logger.error(f"Failed to send email to {to_email} via Resend: {str(e)}", exc_info=True)
+    if not RESEND_API_KEY or not RESEND_FROM_EMAIL:
+        logger.error("Resend configuration missing: RESEND_API_KEY or RESEND_FROM_EMAIL not set.")
         return False
+
+    url = "https://api.resend.com/emails"
+    headers = {
+        "Authorization": f"Bearer {RESEND_API_KEY}",
+        "Content-Type": "application/json",
+    }
+
+    payload = {
+        "from": RESEND_FROM_EMAIL,
+        "to": [to_email],
+        "subject": subject,
+        "html": html_content,
+    }
+
+    if text_content:
+        payload["text"] = text_content
+
+    try:
+        response = requests.post(url, headers=headers, json=payload, timeout=10)
+        response.raise_for_status()
+        data = response.json()
+        message_id = data.get("id", "unknown")
+
+        logger.info(f"✅ Email sent successfully to {to_email} via Resend (ID: {message_id})")
+        return True
+
+    except requests.exceptions.HTTPError as e:
+        logger.error(f"❌ HTTP error sending email to {to_email}: {e.response.text}", exc_info=True)
+    except requests.exceptions.Timeout:
+        logger.error(f"❌ Email send to {to_email} timed out.")
+    except requests.exceptions.RequestException as e:
+        logger.error(f"❌ Request error sending email to {to_email}: {str(e)}", exc_info=True)
+    except Exception as e:
+        logger.error(f"❌ Unexpected error sending email to {to_email}: {str(e)}", exc_info=True)
+
+    return False
 
 def get_greeting():
     hour = datetime.now().hour
@@ -97,25 +118,13 @@ def signup():
     token = serializer.dumps(email, salt="email-verify")
     logger.debug(f"Generated verification code and token for {email}")
 
-    user = User(
-        name=name,
-        email=email,
-        is_verified=False,
-        verification_code=code,
-        verification_token=token
-    )
-    user.set_password(password)
-    db.session.add(user)
-    db.session.commit()
-    logger.info(f"User created successfully: {email} (ID: {user.id})")
-
-    # Build link
+    # Build verification link
     logger.debug("Building verification link")
     logger.debug(f"Backend URL: {os.getenv('BACKEND_URL_LOCAL')}")
     verify_link = f"{os.getenv('BACKEND_URL_LOCAL')}/verify-email/{token}"
     logger.debug(f"verify link generated: {verify_link}")
 
-    # Send verification email via Resend
+    # Prepare email content
     text_content = f"""
 Hi {name},
 
@@ -181,11 +190,35 @@ Keji AI Team
 </html>
 """
     
+    # ✅ SEND EMAIL FIRST (before saving user)
+    logger.debug(f"Attempting to send verification email to {email}")
     if not send_email(email, "Verify your Keji AI account", html_content, text_content):
         logger.error(f"Failed to send verification email to {email}")
-        return jsonify({"error": "Failed to send verification email"}), 500
-
-    return jsonify({"message": "User created. Verification email sent."}), 201
+        # Email failed - don't create user
+        return jsonify({"error": "Failed to send verification email. Please try again later."}), 500
+    
+    logger.info(f"Verification email sent successfully to {email}")
+    
+    # ✅ Email sent successfully - NOW save user to database
+    try:
+        user = User(
+            name=name,
+            email=email,
+            is_verified=False,
+            verification_code=code,
+            verification_token=token
+        )
+        user.set_password(password)
+        db.session.add(user)
+        db.session.commit()
+        logger.info(f"User created successfully: {email} (ID: {user.id})")
+        
+        return jsonify({"message": "User created. Verification email sent."}), 201
+        
+    except Exception as e:
+        db.session.rollback()
+        logger.error(f"Failed to create user {email} after email sent: {str(e)}", exc_info=True)
+        return jsonify({"error": "Failed to create user account. Please try again."}), 500
 
 
 # ✅ VERIFY BY LINK

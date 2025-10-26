@@ -3,7 +3,6 @@ flask-sqlalchemy
 flask-migrate
 flask-login
 flask-cors
-# Flask-Mail
 flask-socketio
 python-socketio
 eventlet
@@ -15,5 +14,4 @@ apscheduler
 gunicorn
 openai
 tiktoken
-resend
 # authlib

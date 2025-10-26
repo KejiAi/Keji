@@ -25,6 +25,7 @@ RESEND_FROM_EMAIL = os.getenv("RESEND_FROM_EMAIL")
 def send_email(to_email, subject, html_content, text_content=None):
     """
     Send an email using the Resend REST API.
+    Uses thread offloading to avoid Eventlet SSL conflicts.
 
     Args:
         to_email (str): Recipient email address
@@ -39,41 +40,51 @@ def send_email(to_email, subject, html_content, text_content=None):
         logger.error("Resend configuration missing: RESEND_API_KEY or RESEND_FROM_EMAIL not set.")
         return False
 
-    url = "https://api.resend.com/emails"
-    headers = {
-        "Authorization": f"Bearer {RESEND_API_KEY}",
-        "Content-Type": "application/json",
-    }
+    def _send_email_in_thread():
+        """Execute email sending in a real thread to avoid Eventlet SSL conflicts"""
+        url = "https://api.resend.com/emails"
+        headers = {
+            "Authorization": f"Bearer {RESEND_API_KEY}",
+            "Content-Type": "application/json",
+        }
 
-    payload = {
-        "from": RESEND_FROM_EMAIL,
-        "to": [to_email],
-        "subject": subject,
-        "html": html_content,
-    }
+        payload = {
+            "from": RESEND_FROM_EMAIL,
+            "to": [to_email],
+            "subject": subject,
+            "html": html_content,
+        }
 
-    if text_content:
-        payload["text"] = text_content
+        if text_content:
+            payload["text"] = text_content
 
+        try:
+            response = requests.post(url, headers=headers, json=payload, timeout=10)
+            response.raise_for_status()
+            data = response.json()
+            message_id = data.get("id", "unknown")
+
+            logger.info(f"Email sent successfully to {to_email} via Resend (ID: {message_id})")
+            return True
+
+        except requests.exceptions.HTTPError as e:
+            logger.error(f"HTTP error sending email to {to_email}: {e.response.text}", exc_info=True)
+        except requests.exceptions.Timeout:
+            logger.error(f"Email send to {to_email} timed out.")
+        except requests.exceptions.RequestException as e:
+            logger.error(f"Request error sending email to {to_email}: {str(e)}", exc_info=True)
+        except Exception as e:
+            logger.error(f"Unexpected error sending email to {to_email}: {str(e)}", exc_info=True)
+
+        return False
+
+    # Run in thread pool to bypass Eventlet's SSL monkey patching
     try:
-        response = requests.post(url, headers=headers, json=payload, timeout=10)
-        response.raise_for_status()
-        data = response.json()
-        message_id = data.get("id", "unknown")
-
-        logger.info(f"✅ Email sent successfully to {to_email} via Resend (ID: {message_id})")
-        return True
-
-    except requests.exceptions.HTTPError as e:
-        logger.error(f"❌ HTTP error sending email to {to_email}: {e.response.text}", exc_info=True)
-    except requests.exceptions.Timeout:
-        logger.error(f"❌ Email send to {to_email} timed out.")
-    except requests.exceptions.RequestException as e:
-        logger.error(f"❌ Request error sending email to {to_email}: {str(e)}", exc_info=True)
+        import eventlet.tpool
+        return eventlet.tpool.execute(_send_email_in_thread)
     except Exception as e:
-        logger.error(f"❌ Unexpected error sending email to {to_email}: {str(e)}", exc_info=True)
-
-    return False
+        logger.error(f"Failed to execute email send in thread pool: {str(e)}", exc_info=True)
+        return False
 
 def get_greeting():
     hour = datetime.now().hour

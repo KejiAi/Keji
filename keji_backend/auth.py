@@ -6,7 +6,7 @@ from flask_login import login_user, logout_user, login_required, current_user
 import logging
 import random
 from itsdangerous import URLSafeTimedSerializer, SignatureExpired, BadSignature
-import os, requests
+import os
 from dotenv import load_dotenv
 from datetime import datetime, timedelta
 
@@ -42,6 +42,9 @@ def send_email(to_email, subject, html_content, text_content=None):
 
     def _send_email_in_thread():
         """Execute email sending in a real thread to avoid Eventlet SSL conflicts"""
+        # Import requests INSIDE thread to get fresh, unpatched SSL
+        import requests
+        
         url = "https://api.resend.com/emails"
         headers = {
             "Authorization": f"Bearer {RESEND_API_KEY}",

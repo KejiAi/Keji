@@ -9,6 +9,8 @@ from itsdangerous import URLSafeTimedSerializer, SignatureExpired, BadSignature
 import os
 from dotenv import load_dotenv
 from datetime import datetime, timedelta
+import subprocess
+import json
 
 
 load_dotenv()
@@ -18,14 +20,14 @@ logger = logging.getLogger(__name__)
 auth_bp = Blueprint("auth", __name__)
 serializer = URLSafeTimedSerializer(os.getenv('SECRET_KEY'))
 
-# Configure Resend with requests to avoid ssl issues on render
+# Configure Resend
 RESEND_API_KEY = os.getenv("RESEND_API_KEY")
 RESEND_FROM_EMAIL = os.getenv("RESEND_FROM_EMAIL")
 
 def send_email(to_email, subject, html_content, text_content=None):
     """
-    Send an email using the Resend REST API.
-    Uses thread offloading to avoid Eventlet SSL conflicts.
+    Send an email using Resend via subprocess.
+    Subprocess completely isolates from Eventlet (no SSL conflicts).
 
     Args:
         to_email (str): Recipient email address
@@ -40,53 +42,55 @@ def send_email(to_email, subject, html_content, text_content=None):
         logger.error("Resend configuration missing: RESEND_API_KEY or RESEND_FROM_EMAIL not set.")
         return False
 
-    def _send_email_in_thread():
-        """Execute email sending in a real thread to avoid Eventlet SSL conflicts"""
-        # Import requests INSIDE thread to get fresh, unpatched SSL
-        import requests
-        
-        url = "https://api.resend.com/emails"
-        headers = {
-            "Authorization": f"Bearer {RESEND_API_KEY}",
-            "Content-Type": "application/json",
-        }
-
-        payload = {
-            "from": RESEND_FROM_EMAIL,
-            "to": [to_email],
-            "subject": subject,
-            "html": html_content,
-        }
-
-        if text_content:
-            payload["text"] = text_content
-
-        try:
-            response = requests.post(url, headers=headers, json=payload, timeout=10)
-            response.raise_for_status()
-            data = response.json()
-            message_id = data.get("id", "unknown")
-
-            logger.info(f"Email sent successfully to {to_email} via Resend (ID: {message_id})")
-            return True
-
-        except requests.exceptions.HTTPError as e:
-            logger.error(f"HTTP error sending email to {to_email}: {e.response.text}", exc_info=True)
-        except requests.exceptions.Timeout:
-            logger.error(f"Email send to {to_email} timed out.")
-        except requests.exceptions.RequestException as e:
-            logger.error(f"Request error sending email to {to_email}: {str(e)}", exc_info=True)
-        except Exception as e:
-            logger.error(f"Unexpected error sending email to {to_email}: {str(e)}", exc_info=True)
-
-        return False
-
-    # Run in thread pool to bypass Eventlet's SSL monkey patching
     try:
-        import eventlet.tpool
-        return eventlet.tpool.execute(_send_email_in_thread)
+        # Build command to run email helper in isolated subprocess
+        cmd = [
+            'python',
+            os.path.join(os.path.dirname(__file__), 'send_email_helper.py'),
+            RESEND_API_KEY,
+            RESEND_FROM_EMAIL,
+            to_email,
+            subject,
+            html_content
+        ]
+        
+        if text_content:
+            cmd.append(text_content)
+        
+        # Run subprocess with timeout
+        result = subprocess.run(
+            cmd,
+            capture_output=True,
+            text=True,
+            timeout=30
+        )
+        
+        if result.returncode == 0:
+            # Parse success response
+            try:
+                response_data = json.loads(result.stdout)
+                message_id = response_data.get('id', 'unknown')
+                logger.info(f"Email sent successfully to {to_email} via Resend (ID: {message_id})")
+                return True
+            except json.JSONDecodeError:
+                logger.error(f"Invalid JSON response from email helper: {result.stdout}")
+                return False
+        else:
+            # Parse error response
+            try:
+                error_data = json.loads(result.stdout)
+                error_msg = error_data.get('error', 'Unknown error')
+            except:
+                error_msg = result.stderr or result.stdout or 'Unknown error'
+            
+            logger.error(f"Failed to send email to {to_email}: {error_msg}")
+            return False
+
+    except subprocess.TimeoutExpired:
+        logger.error(f"Email send to {to_email} timed out after 30 seconds")
+        return False
     except Exception as e:
-        logger.error(f"Failed to execute email send in thread pool: {str(e)}", exc_info=True)
+        logger.error(f"Error sending email to {to_email}: {str(e)}", exc_info=True)
         return False
 
 def get_greeting():

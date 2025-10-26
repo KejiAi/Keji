@@ -430,19 +430,6 @@ def logout():
     logout_user()
     session.clear()  # Clear all session data
 
-    # Debug: print out the cookie config values being used
-    # logger.info(f"REMEMBER_COOKIE_DOMAIN = {app.config.get('REMEMBER_COOKIE_DOMAIN')}")
-    # logger.info(f"SESSION_COOKIE_DOMAIN  = {app.config.get('SESSION_COOKIE_DOMAIN')}")
-
-    # logger.info(f"REMEMBER_COOKIE_SECURE = {app.config.get('REMEMBER_COOKIE_SECURE')}")
-    # logger.info(f"SESSION_COOKIE_SECURE  = {app.config.get('SESSION_COOKIE_SECURE')}")
-    
-    # logger.info(f"REMEMBER_COOKIE_SAMESITE = {app.config.get('REMEMBER_COOKIE_SAMESITE')}")
-    # logger.info(f"SESSION_COOKIE_SAMESITE = {app.config.get('SESSION_COOKIE_SAMESITE')}")
-
-    # logger.info(f"REMEMBER_COOKIE_NAME = {app.config.get('REMEMBER_COOKIE_NAME')}")
-    # logger.info(f"SESSION_COOKIE_NAME = {app.config.get('SESSION_COOKIE_NAME')}")
-
     response = make_response(jsonify({"message": "Logged out"}), 200)
 
     # Clear remember token cookie with same settings as when it was set

@@ -1,7 +1,6 @@
 from flask import Flask, jsonify, request
 from flask_login import login_required, current_user
 from flask_cors import CORS
-from flask_mail import Message
 from dotenv import load_dotenv
 import os
 import logging
@@ -75,13 +74,13 @@ app.config["REMEMBER_COOKIE_DOMAIN"] = None
 app.config["REMEMBER_COOKIE_PATH"] = "/"
 
 # Mail handler
-app.config['MAIL_SERVER'] = os.environ.get('MAIL_SERVER')
-app.config['MAIL_PORT'] = int(os.environ.get('MAIL_PORT', 587))
-app.config['MAIL_USE_TLS'] = os.environ.get('MAIL_USE_TLS') == 'True'
-app.config['MAIL_USE_SSL'] = os.environ.get('MAIL_USE_SSL') == 'True'
-app.config['MAIL_USERNAME'] = os.environ.get('MAIL_USERNAME')
-app.config['MAIL_PASSWORD'] = os.environ.get('MAIL_PASSWORD')
-app.config['MAIL_DEFAULT_SENDER'] = os.environ.get('MAIL_DEFAULT_SENDER')
+# app.config['MAIL_SERVER'] = os.environ.get('MAIL_SERVER')
+# app.config['MAIL_PORT'] = int(os.environ.get('MAIL_PORT', 587))
+# app.config['MAIL_USE_TLS'] = os.environ.get('MAIL_USE_TLS') == 'True'
+# app.config['MAIL_USE_SSL'] = os.environ.get('MAIL_USE_SSL') == 'True'
+# app.config['MAIL_USERNAME'] = os.environ.get('MAIL_USERNAME')
+# app.config['MAIL_PASSWORD'] = os.environ.get('MAIL_PASSWORD')
+# app.config['MAIL_DEFAULT_SENDER'] = os.environ.get('MAIL_DEFAULT_SENDER')
 
 # Initialize extensions with app
 db.init_app(app)

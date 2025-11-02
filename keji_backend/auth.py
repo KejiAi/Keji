@@ -560,27 +560,36 @@ from apscheduler.schedulers.background import BackgroundScheduler
 
 scheduler = BackgroundScheduler()
 
-@scheduler.scheduled_job("interval", hours=1)
-def cleanup_job():
-    from flask import current_app
-    with current_app.app_context():
-        logger.info("Scheduled cleanup job started")
-        deleted = delete_expired_unverified_users()
-        logger.info(f"Scheduled cleanup completed: {deleted} expired unverified users deleted")
-
-@scheduler.scheduled_job("interval", minutes=4)
-def keep_db_alive():
+def init_scheduler(app):
     """
-    Ping the database every 4 minutes to prevent Neon DB hibernation.
-    Neon free tier hibernates after ~5 minutes of inactivity.
+    Initialize scheduled jobs with Flask app context.
+    Must be called after app is created.
     """
-    from flask import current_app
-    with current_app.app_context():
-        try:
-            # Simple lightweight query to keep connection alive
-            result = db.session.execute(db.text("SELECT 1")).scalar()
-            logger.debug(f"✅ Database keep-alive ping successful (result: {result})")
-        except Exception as e:
-            logger.error(f"❌ Database keep-alive ping failed: {str(e)}", exc_info=True)
-
-scheduler.start()
+    
+    def cleanup_job():
+        with app.app_context():
+            logger.info("Scheduled cleanup job started")
+            deleted = delete_expired_unverified_users()
+            logger.info(f"Scheduled cleanup completed: {deleted} expired unverified users deleted")
+    
+    def keep_db_alive():
+        """
+        Ping the database every 4 minutes to prevent Neon DB hibernation.
+        Neon free tier hibernates after ~5 minutes of inactivity.
+        """
+        with app.app_context():
+            try:
+                # Simple lightweight query to keep connection alive
+                result = db.session.execute(db.text("SELECT 1")).scalar()
+                logger.debug(f"✅ Database keep-alive ping successful (result: {result})")
+            except Exception as e:
+                logger.error(f"❌ Database keep-alive ping failed: {str(e)}", exc_info=True)
+    
+    # Register jobs
+    scheduler.add_job(cleanup_job, 'interval', hours=1, id='cleanup_job')
+    scheduler.add_job(keep_db_alive, 'interval', minutes=4, id='keep_db_alive')
+    
+    # Start scheduler
+    if not scheduler.running:
+        scheduler.start()
+        logger.info("Background scheduler started with cleanup and keep-alive jobs")

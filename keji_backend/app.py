@@ -96,8 +96,8 @@ socketio.init_app(
     engineio_logger=True,
     cookie='session',
     manage_session=True,
-    ping_timeout=120,
-    ping_interval=25,
+    ping_timeout=60,  # 60 seconds - wait 60s for pong (reduced from 120)
+    ping_interval=20,  # 20 seconds - send ping every 20s (more frequent, reduced from 25)
     max_http_buffer_size=10000000
 )
 
@@ -116,6 +116,9 @@ app.register_blueprint(chat_bp)
 # Import WebSocket handlers (must be after socketio initialization)
 import websocket
 
+# Initialize background scheduler with app context
+from auth import init_scheduler
+init_scheduler(app)
 
 @login_manager.user_loader
 def load_user(user_id):

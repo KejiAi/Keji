@@ -39,6 +39,8 @@ interface SocketError {
 interface SocketContextType {
   socket: Socket | null;
   isConnected: boolean;
+  isReconnecting: boolean;
+  connectionAttempts: number;
   sendMessage: (message: string, files?: File[]) => void;
   acceptRecommendation: (title: string, content: string) => void;
   requestHistory: () => void;
@@ -65,6 +67,8 @@ interface SocketProviderProps {
 export const SocketProvider: React.FC<SocketProviderProps> = ({ children }) => {
   const [socket, setSocket] = useState<Socket | null>(null);
   const [isConnected, setIsConnected] = useState(false);
+  const [isReconnecting, setIsReconnecting] = useState(false);
+  const [connectionAttempts, setConnectionAttempts] = useState(0);
   const eventHandlersRef = useRef<{
     onReceiveMessage: Set<(data: SocketMessage) => void>;
     onReceiveRecommendation: Set<(data: SocketRecommendation) => void>;
@@ -86,31 +90,74 @@ export const SocketProvider: React.FC<SocketProviderProps> = ({ children }) => {
       withCredentials: true,
       transports: ['websocket', 'polling'],
       reconnection: true,
-      reconnectionAttempts: 5,
-      reconnectionDelay: 1000,
+      reconnectionAttempts: Infinity, // Retry forever until connected
+      reconnectionDelay: 1000, // Start with 1 second
+      reconnectionDelayMax: 5000, // Max 5 seconds between retries
+      randomizationFactor: 0.5, // Add randomness to prevent thundering herd
       timeout: 120000, // 2 minutes timeout for initial connection
       // No timeout for message responses - wait indefinitely
       ackTimeout: 300000, // 5 minutes for acknowledgments (very long processing)
+      // Keep connection alive with aggressive ping/pong
+      pingTimeout: 60000, // 60 seconds - wait 60s for pong response
+      pingInterval: 25000, // 25 seconds - send ping every 25s
     });
 
     // Connection event handlers
     newSocket.on('connect', () => {
       console.log('✅ WebSocket connected');
       setIsConnected(true);
+      setIsReconnecting(false);
+      setConnectionAttempts(0);
     });
 
     newSocket.on('connected', (data) => {
       console.log('✅ WebSocket connection confirmed:', data);
+      setIsConnected(true);
+      setIsReconnecting(false);
+      setConnectionAttempts(0);
     });
 
-    newSocket.on('disconnect', () => {
-      console.log('❌ WebSocket disconnected');
+    newSocket.on('disconnect', (reason) => {
+      console.log('❌ WebSocket disconnected:', reason);
       setIsConnected(false);
+      
+      // Only show reconnecting if it's an unexpected disconnect
+      if (reason === 'io server disconnect') {
+        // Server disconnected (e.g., auth failure) - don't auto-reconnect
+        setIsReconnecting(false);
+      } else {
+        // Client-side disconnect or network issues - will auto-reconnect
+        setIsReconnecting(true);
+      }
+    });
+
+    newSocket.on('reconnect_attempt', (attemptNumber) => {
+      console.log(`🔄 Reconnection attempt ${attemptNumber}...`);
+      setIsReconnecting(true);
+      setConnectionAttempts(attemptNumber);
+    });
+
+    newSocket.on('reconnect', (attemptNumber) => {
+      console.log(`✅ Reconnected after ${attemptNumber} attempts`);
+      setIsConnected(true);
+      setIsReconnecting(false);
+      setConnectionAttempts(0);
+    });
+
+    newSocket.on('reconnect_error', (error) => {
+      console.error('❌ Reconnection error:', error);
+      setIsReconnecting(true);
+    });
+
+    newSocket.on('reconnect_failed', () => {
+      console.error('❌ Reconnection failed - will keep trying...');
+      setIsReconnecting(true);
     });
 
     newSocket.on('connect_error', (error) => {
       console.error('❌ WebSocket connection error:', error);
       setIsConnected(false);
+      setIsReconnecting(true);
     });
 
     // Message event handlers
@@ -246,6 +293,8 @@ export const SocketProvider: React.FC<SocketProviderProps> = ({ children }) => {
   const value: SocketContextType = {
     socket,
     isConnected,
+    isReconnecting,
+    connectionAttempts,
     sendMessage,
     acceptRecommendation,
     requestHistory,

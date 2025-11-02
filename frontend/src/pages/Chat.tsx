@@ -9,6 +9,7 @@ import { getBackendUrl } from "@/lib/utils";
 import { useSession } from "@/contexts/SessionContext";
 import { useSocket } from "@/contexts/SocketContext";
 import RecommendationPopup from "@/components/modals/RecommendationPopup";
+import { ConnectionStatus } from "@/components/common/ConnectionStatus";
 
 const frontendUrl = import.meta.env.VITE_FRONTEND_BASE_URL;
 
@@ -39,7 +40,8 @@ const Chat = () => {
   const location = useLocation();
   const { user, isLoading: sessionLoading } = useSession();
   const { 
-    isConnected, 
+    isConnected,
+    isReconnecting, 
     sendMessage: socketSendMessage, 
     acceptRecommendation: socketAcceptRecommendation,
     requestHistory,
@@ -59,7 +61,7 @@ const Chat = () => {
   const hasProcessedInitialMessage = useRef(false);
   const [textareaHeight, setTextareaHeight] = useState(48); // Initial height in pixels
   const [borderRadius, setBorderRadius] = useState(24); // Initial border radius
-  const [loadingMessage, setLoadingMessage] = useState("Keji is thinking...");
+  const [loadingMessage, setLoadingMessage] = useState("Keji is thinking");
   const loadingTimerRef = useRef<NodeJS.Timeout | null>(null);
 
   // ✅ Set up WebSocket event listeners
@@ -80,7 +82,7 @@ const Chat = () => {
         clearTimeout(loadingTimerRef.current);
         loadingTimerRef.current = null;
       }
-      setLoadingMessage("Keji is thinking...");
+      setLoadingMessage("Keji is thinking");
     });
 
     // Handle incoming recommendations
@@ -97,7 +99,7 @@ const Chat = () => {
         clearTimeout(loadingTimerRef.current);
         loadingTimerRef.current = null;
       }
-      setLoadingMessage("Keji is thinking...");
+      setLoadingMessage("Keji is thinking");
     });
 
     // Handle chat history
@@ -130,7 +132,7 @@ const Chat = () => {
         clearTimeout(loadingTimerRef.current);
         loadingTimerRef.current = null;
       }
-      setLoadingMessage("Keji is thinking...");
+      setLoadingMessage("Keji is thinking");
     });
 
     // Cleanup all handlers on unmount
@@ -234,7 +236,9 @@ const Chat = () => {
       console.error("WebSocket not connected");
       const errorMessage: Message = {
         id: Date.now().toString(),
-        text: "Connection lost. Please refresh the page.",
+        text: isReconnecting 
+          ? "Reconnecting to server... Please wait a moment and try again." 
+          : "Connection lost. Reconnecting automatically...",
         sender: "ai",
         timestamp: new Date(),
       };
@@ -252,38 +256,7 @@ const Chat = () => {
     setInputMessage("");
     setSelectedFiles([]);
     setLoading(true);
-    setLoadingMessage("Keji is thinking...");
-
-    // Set up progressive loading messages to show processing is ongoing
-    let messageIndex = 0;
-    const progressMessages = [
-      "Keji is thinking...",
-      "Analyzing your request...",
-      "Processing information...",
-      "Preparing your answer...",
-      "Almost ready...",
-      "Still working on it..."
-    ];
-
-    // Clear any existing timer
-    if (loadingTimerRef.current) {
-      clearTimeout(loadingTimerRef.current);
-    }
-
-    // Update loading message every 8 seconds
-    const updateLoadingMessage = () => {
-      messageIndex++;
-      if (messageIndex < progressMessages.length) {
-        setLoadingMessage(progressMessages[messageIndex]);
-        loadingTimerRef.current = setTimeout(updateLoadingMessage, 8000);
-      } else {
-        // After all messages, just show "Still processing..."
-        setLoadingMessage("Still processing... Keji is working hard!");
-      }
-    };
-
-    // Start the timer for the first update (after 8 seconds)
-    loadingTimerRef.current = setTimeout(updateLoadingMessage, 8000);
+    setLoadingMessage("Keji is thinking");
 
     // Send message via WebSocket
     console.log('📤 Sending message via WebSocket:', messageText);
@@ -370,6 +343,7 @@ const Chat = () => {
   return (
     <PageContainer variant="static">
       <SEO title="Chat — Keji AI" description="Chat with your AI food assistant" />
+      <ConnectionStatus />
 
       <div className="flex flex-col h-screen bg-background">
         {/* Header */}
@@ -484,8 +458,13 @@ const Chat = () => {
                           style={{ animationDelay: "0.2s" }}
                         ></div>
                       </div>
-                      <div className="text-xs text-muted-foreground">
-                        {loadingMessage}
+                      <div className="text-xs text-muted-foreground flex items-center gap-0">
+                        <span>{loadingMessage}</span>
+                        <span className="inline-flex">
+                          <span className="animate-[bounce_1.4s_ease-in-out_infinite]">.</span>
+                          <span className="animate-[bounce_1.4s_ease-in-out_0.2s_infinite]">.</span>
+                          <span className="animate-[bounce_1.4s_ease-in-out_0.4s_infinite]">.</span>
+                        </span>
                       </div>
                     </div>
                   </div>

@@ -134,54 +134,20 @@ const EmailVerification = () => {
           <h1 className="font-funnelDisplay text-3xl md:text-4xl font-bold leading-tight tracking-tight mb-2">
             Check Your Email
           </h1>
-          <p className="font-geist text-lg text-muted-foreground">
-            We've sent a verification link to <strong>{email}</strong>
+          <p className="font-geist text-lg text-muted-foreground px-2">
+            We’ve sent a verification link and code to <strong>{email}</strong>.
+            You can either click the link in the email or enter the code manually to verify your account.
           </p>
         </div>
 
         <div className="space-y-6">
-          {/* Option A: Email Link Verification */}
-          <Card className="border-2 border-dashed border-primary/20 hover:border-primary/40 transition-colors">
-            <CardHeader className="text-center pb-4">
-              <div className="mx-auto w-12 h-12 bg-primary/10 rounded-full flex items-center justify-center mb-3">
-                <CheckCircle className="w-6 h-6 text-primary" />
-              </div>
-              <CardTitle className="text-xl">Option 1: Click the Email Link</CardTitle>
-              <CardDescription>
-                Check your inbox and click the verification link we sent you
-              </CardDescription>
-            </CardHeader>
-            <CardContent className="text-center">
-              <Button
-                variant="outline"
-                onClick={handleEmailLinkVerification}
-                className="w-full"
-              >
-                I clicked the link in my email
-              </Button>
-              <p className="text-sm text-muted-foreground mt-3">
-                Didn't receive an email? Check your spam folder
-              </p>
-            </CardContent>
-          </Card>
-
-          {/* Divider */}
-          <div className="relative">
-            <div className="absolute inset-0 flex items-center">
-              <span className="w-full border-t" />
-            </div>
-            <div className="relative flex justify-center text-xs uppercase">
-              <span className="bg-background px-2 text-muted-foreground">Or</span>
-            </div>
-          </div>
-
-          {/* Option B: Manual Code Entry */}
+          {/* Manual Code Entry */}
           <Card>
             <CardHeader className="text-center pb-4">
               <div className="mx-auto w-12 h-12 bg-secondary/10 rounded-full flex items-center justify-center mb-3">
                 <KeyRound className="w-6 h-6 text-secondary-foreground" />
               </div>
-              <CardTitle className="text-xl">Option 2: Enter Verification Code</CardTitle>
+              <CardTitle className="text-xl">Enter Verification Code</CardTitle>
               <CardDescription>
                 Enter the 6-digit code from your email manually
               </CardDescription>

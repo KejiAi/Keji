@@ -568,4 +568,19 @@ def cleanup_job():
         deleted = delete_expired_unverified_users()
         logger.info(f"Scheduled cleanup completed: {deleted} expired unverified users deleted")
 
+@scheduler.scheduled_job("interval", minutes=4)
+def keep_db_alive():
+    """
+    Ping the database every 4 minutes to prevent Neon DB hibernation.
+    Neon free tier hibernates after ~5 minutes of inactivity.
+    """
+    from flask import current_app
+    with current_app.app_context():
+        try:
+            # Simple lightweight query to keep connection alive
+            result = db.session.execute(db.text("SELECT 1")).scalar()
+            logger.debug(f"✅ Database keep-alive ping successful (result: {result})")
+        except Exception as e:
+            logger.error(f"❌ Database keep-alive ping failed: {str(e)}", exc_info=True)
+
 scheduler.start()

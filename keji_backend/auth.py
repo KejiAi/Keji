@@ -368,12 +368,6 @@ def login():
     logger.info(f"Login successful for user: {user.name} ({email}) - ID: {user.id}")
     return jsonify({"message": "Login successful"}), 200
 
-# Handle forgot password
-def generate_temp_password(length=10):
-    """Generate a secure, user-friendly random password."""
-    characters = string.ascii_letters + string.digits
-    return ''.join(random.choice(characters) for _ in range(length))
-
 @auth_bp.route("/forgot-password", methods=["POST"])
 def forgot_password():
     logger.info("Forgot password request received")
@@ -391,29 +385,30 @@ def forgot_password():
         logger.warning(f"Password reset failed: User not found for email: {email}")
         return jsonify({"error": "User not found"}), 404
 
-    # ✅ Generate a clean random password
-    temp_password = generate_temp_password()
-    logger.debug(f"Generated temporary password for user: {email}")
+    # Generate secure reset token (expires in 1 hour)
+    reset_token = serializer.dumps(email, salt='password-reset-salt')
+    logger.debug(f"Generated reset token for user: {email}")
 
-    # ✅ Hash and save in DB
-    user.set_password(temp_password)
-    db.session.commit()
-    logger.info(f"Password reset successfully for user: {email} (ID: {user.id})")
+    # Create reset link
+    frontend_url = os.getenv('FRONTEND_BASE_URL', 'http://localhost:8080')
+    reset_link = f"{frontend_url}/reset-password?token={reset_token}"
 
     # Send password reset email via Resend
     text_content = f"""
 Hey {user.name},
 
 No stress – password resets happen to the best of us!
-Here's your brand new password:
 
-{temp_password}
+Click the link below to reset your password:
 
-You can continue using this password if you'd like,
-or update it anytime from your profile under Change Password for extra security.
+{reset_link}
 
-Stay awesome,
-Keji AI Team
+This link will expire in 1 hour for security.
+
+If you didn't request this, you can safely ignore this email.
+
+Cheers,
+The Keji Team
 """
     
     html_content = f"""
@@ -423,44 +418,42 @@ Keji AI Team
     <style>
         body {{ font-family: Arial, sans-serif; line-height: 1.6; color: #333; }}
         .container {{ max-width: 600px; margin: 0 auto; padding: 20px; }}
-        .password-box {{ 
-            font-size: 20px; 
-            font-weight: bold; 
-            padding: 15px; 
-            background-color: #f5f5f5; 
-            border-left: 4px solid #4CAF50;
-            border-radius: 5px; 
+        .reset-button {{ 
+            display: inline-block;
+            padding: 15px 30px;
+            background-color: #4CAF50;
+            color: white;
+            text-decoration: none;
+            border-radius: 5px;
+            font-weight: bold;
             margin: 20px 0;
-            font-family: 'Courier New', monospace;
         }}
-        .tip {{ 
-            background-color: #E8F5E9; 
-            padding: 15px; 
-            border-radius: 5px; 
-            margin: 20px 0;
+        .reset-button:hover {{
+            background-color: #45a049;
         }}
     </style>
 </head>
 <body>
     <div class="container">
-        <h2>Password Reset Successful 🔑</h2>
+        <h2>Reset Your Password 🔑</h2>
         <p>Hey {user.name} 👋,</p>
         <p>No stress – password resets happen to the best of us! 💪</p>
         
-        <p>Here's your brand new password:</p>
-        <div class="password-box">{temp_password}</div>
+        <p>Click the button below to reset your password:</p>
+        <a href="{reset_link}" class="reset-button">Reset Password</a>
         
-        <div class="tip">
-            <strong>💡 Tip:</strong> You can continue using this password if you'd like ✅, 
-            or update it anytime from your profile under <strong>Change Password</strong> for extra security 🔒.
-        </div>
+        <p>Or copy and paste this link in your browser:</p>
+        <p style="background-color: #f5f5f5; padding: 10px; border-radius: 5px; word-break: break-all;">
+            {reset_link}
+        </p>
         
-        <p>Stay awesome,<br>
-        <strong>Keji AI Team</strong> ✨</p>
+        <p style="color: #666; font-size: 14px; margin-top: 20px;">
+            ⏰ This link will expire in 1 hour for security.
+        </p>
         
         <hr style="margin: 30px 0; border: none; border-top: 1px solid #eee;">
         <p style="color: #999; font-size: 12px;">
-            If you didn't request this password reset, please contact us immediately.
+            If you didn't request this password reset, please ignore this email. Your password will remain unchanged.
         </p>
     </div>
 </body>
@@ -471,7 +464,43 @@ Keji AI Team
         logger.error(f"Failed to send password reset email to {email}")
         return jsonify({"error": "Failed to send password reset email"}), 500
 
-    return jsonify({"message": "Password reset email sent successfully"}), 200
+    logger.info(f"Password reset link sent to {email}")
+    return jsonify({"message": "Password reset link sent to your email"}), 200
+
+
+@auth_bp.route("/reset-password", methods=["POST"])
+def reset_password():
+    logger.info("Reset password request received")
+    data = request.get_json()
+    token = data.get("token")
+    new_password = data.get("password")
+
+    if not token or not new_password:
+        logger.warning("Reset password failed: Missing token or password")
+        return jsonify({"error": "Token and password are required"}), 400
+
+    try:
+        # Verify token (expires in 1 hour = 3600 seconds)
+        email = serializer.loads(token, salt='password-reset-salt', max_age=3600)
+        logger.debug(f"Token verified for email: {email}")
+    except SignatureExpired:
+        logger.warning("Reset password failed: Token expired")
+        return jsonify({"error": "Reset link has expired. Please request a new one."}), 400
+    except BadSignature:
+        logger.warning("Reset password failed: Invalid token")
+        return jsonify({"error": "Invalid reset link"}), 400
+
+    user = User.query.filter_by(email=email).first()
+    if not user:
+        logger.warning(f"Reset password failed: User not found for email: {email}")
+        return jsonify({"error": "User not found"}), 404
+
+    # Update password
+    user.set_password(new_password)
+    db.session.commit()
+    logger.info(f"Password reset successful for user: {email} (ID: {user.id})")
+
+    return jsonify({"message": "Password reset successful"}), 200
 
 
 @auth_bp.route("/logout", methods=["POST"])

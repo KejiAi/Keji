@@ -10,6 +10,7 @@ import MobileOnlyWrapper from "./components/common/MobileOnlyWrapper";
 import Index from "./pages/Index";
 import Start from "./pages/Start";
 import EmailVerification from "./pages/EmailVerification";
+import ResetPassword from "./pages/ResetPassword";
 import Homepage from "./pages/Homepage";
 import Chat from "./pages/Chat";
 import Profile from "./pages/Profile";
@@ -30,10 +31,10 @@ const App = () => (
                 <Route path="/" element={<Index />} />
                 <Route path="/start" element={<Start />} />
                 <Route path="/verify-email" element={<EmailVerification />} />
+                <Route path="/reset-password" element={<ResetPassword />} />
                 <Route path="/homepage" element={<ProtectedRoute><Homepage /></ProtectedRoute>} />
                 <Route path="/chat" element={<ProtectedRoute><Chat /></ProtectedRoute>} />
                 <Route path="/profile" element={<ProtectedRoute><Profile /></ProtectedRoute>} />
-                {/* All errors + 404s handled by NotFound */}
                 <Route path="/error" element={<NotFound />} />
                 <Route path="*" element={<NotFound />} />
               </Routes>

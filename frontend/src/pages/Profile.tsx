@@ -25,7 +25,7 @@ const Profile = () => {
   };
 
   const settingsItems = [
-    { icon: "assets/All Icon Used/mdi_password.png", label: "Password", onClick: () => {} },
+    // { icon: "assets/All Icon Used/mdi_password.png", label: "Password", onClick: () => {} },
     { icon: "assets/All Icon Used/mingcute_voice-fill.png", label: "Change tone", onClick: () => {} },
     { icon: "assets/All Icon Used/mage_star-fill.png", label: "Favourites", onClick: () => {} },
   ];

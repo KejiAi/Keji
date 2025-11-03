@@ -99,8 +99,8 @@ const Start = () => {
         setForgotPasswordSuccess(true);
 
         toast({
-          title: "📧 A new password has been sent to your Email!",
-          description: "We’ve sent you a new password. Check your Gmail inbox and log in with it. 🔑 You can later update it in your profile settings.",
+          title: "📧 Reset link sent to your email!",
+          description: "Check your inbox and click the link to reset your password.",
         });
 
         // Optionally clear the input after success
@@ -244,11 +244,8 @@ const Start = () => {
                   <h3 className="font-semibold">Check Your Email! 📧</h3>
                 </div>
                 <div className="text-emerald-600 dark:text-emerald-400 space-y-2">
-                  <p>We've emailed you a new password to your Gmail inbox. You can keep using it ✅ or change it later in your profile settings.</p>
-                  <p className="text-sm">
-                    You can change this password later from 
-                    <span className="font-semibold"> Profile → Change Password</span> settings.
-                  </p>
+                  <p>We've sent a password reset link to your email. Click the link to create a new password.</p>
+                  <p className="text-sm">The link will expire in 1 hour for security.</p>
                 </div>
               </div>
             )}

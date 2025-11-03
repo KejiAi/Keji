@@ -10,6 +10,9 @@ from context_manager import (
 )
 from datetime import datetime
 import logging
+import time
+import uuid
+import re
 
 # Create logger for this module
 logger = logging.getLogger(__name__)
@@ -92,6 +95,41 @@ def should_send_context_info(conversation_history):
     logger.debug(f"Context: time={should_send_time} (current={current_time}), name={should_send_name} (msg#{user_message_count})")
     
     return should_send_time, should_send_name, current_time 
+
+def split_into_chunks(text, max_chunk_size=150):
+    """
+    Split text into chunks of complete sentences.
+    
+    Args:
+        text: The text to split
+        max_chunk_size: Maximum characters per chunk (default 150)
+    
+    Returns:
+        list: List of text chunks
+    """
+    # Split by sentence endings (. ! ?)
+    sentences = re.split(r'([.!?]+\s+)', text)
+    
+    chunks = []
+    current_chunk = ""
+    
+    for i in range(0, len(sentences), 2):
+        sentence = sentences[i]
+        punctuation = sentences[i + 1] if i + 1 < len(sentences) else ""
+        full_sentence = sentence + punctuation
+        
+        # If adding this sentence exceeds max_chunk_size and current_chunk is not empty
+        if current_chunk and len(current_chunk) + len(full_sentence) > max_chunk_size:
+            chunks.append(current_chunk.strip())
+            current_chunk = full_sentence
+        else:
+            current_chunk += full_sentence
+    
+    # Add remaining chunk
+    if current_chunk.strip():
+        chunks.append(current_chunk.strip())
+    
+    return chunks if chunks else [text]  # Return original text if no splits
 
 def call_llm(messages, user_name=None, conversation_history=None, time_of_day=None):
     """
@@ -325,27 +363,88 @@ def handle_send_message(data):
             emit('receive_recommendation', bot_reply)
             
         else:
-            # Normal chat: save immediately
+            # Normal chat: save and send (with chunking for long messages)
             reply_text = bot_reply.get("content") if isinstance(bot_reply, dict) else str(bot_reply)
             
             if not reply_text:
                 logger.warning("Empty reply from AI, using fallback")
                 reply_text = "Yeah, how can I help you?"
             
-            bot_msg = Message(conversation_id=conversation.id, sender="bot", text=reply_text)
-            db.session.add(bot_msg)
-            db.session.commit()
+            # Decide if we should chunk this message
+            should_chunk = len(reply_text) > 100
             
-            # Send message to client
-            message_data = {
-                'type': 'chat',
-                'role': 'assistant',
-                'content': reply_text,
-                'message_id': bot_msg.id,
-                'timestamp': bot_msg.timestamp.isoformat()
-            }
-            emit('receive_message', message_data)
-            logger.info("Message sent to client")
+            if should_chunk:
+                # Split into chunks and save each chunk
+                chunks = split_into_chunks(reply_text, max_chunk_size=150)
+                message_group_id = str(uuid.uuid4())
+                logger.info(f"Chunking message: {len(chunks)} chunks, group ID: {message_group_id}")
+                
+                # Save all chunks to database
+                chunk_messages = []
+                for i, chunk in enumerate(chunks):
+                    chunk_msg = Message(
+                        conversation_id=conversation.id,
+                        sender="bot",
+                        text=chunk,
+                        message_group_id=message_group_id,
+                        chunk_index=i,
+                        total_chunks=len(chunks)
+                    )
+                    db.session.add(chunk_msg)
+                    chunk_messages.append(chunk_msg)
+                
+                db.session.commit()
+                logger.info(f"All {len(chunks)} chunks saved to database")
+                
+                # Send chunks to client with delays based on text length
+                for i, (chunk, chunk_msg) in enumerate(zip(chunks, chunk_messages)):
+                    # Calculate delay based on chunk length (simulate realistic typing)
+                    if i > 0:
+                        # Base delay (thinking/pause between sentences) + typing time
+                        base_delay = 0.8
+                        typing_speed = 40  # characters per second (realistic fast typing)
+                        typing_time = len(chunk) / typing_speed
+                        delay = base_delay + typing_time
+                        
+                        logger.debug(f"Chunk {i+1}/{len(chunks)}: {len(chunk)} chars, waiting {delay:.2f}s")
+                        time.sleep(delay)
+                    
+                    chunk_data = {
+                        'type': 'chat_chunk',
+                        'role': 'assistant',
+                        'chunk': chunk,
+                        'chunk_index': i,
+                        'total_chunks': len(chunks),
+                        'is_final': i == len(chunks) - 1,
+                        'message_group_id': message_group_id,
+                        'message_id': chunk_msg.id,
+                        'timestamp': chunk_msg.timestamp.isoformat()
+                    }
+                    emit('receive_chunk', chunk_data)
+                    logger.debug(f"Chunk {i+1}/{len(chunks)} sent")
+                
+                logger.info(f"All {len(chunks)} chunks sent to client")
+                
+            else:
+                # Short message - save as single message and send immediately
+                bot_msg = Message(
+                    conversation_id=conversation.id,
+                    sender="bot",
+                    text=reply_text
+                )
+                db.session.add(bot_msg)
+                db.session.commit()
+                
+                # Send message to client
+                message_data = {
+                    'type': 'chat',
+                    'role': 'assistant',
+                    'content': reply_text,
+                    'message_id': bot_msg.id,
+                    'timestamp': bot_msg.timestamp.isoformat()
+                }
+                emit('receive_message', message_data)
+                logger.info("Message sent to client")
         
     except Exception as e:
         logger.error(f"Error saving/sending response: {str(e)}", exc_info=True)

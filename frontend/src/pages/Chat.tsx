@@ -8,6 +8,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { getBackendUrl } from "@/lib/utils";
 import { useSession } from "@/contexts/SessionContext";
 import { useSocket } from "@/contexts/SocketContext";
+import type { SocketHistoryMessage } from "@/contexts/SocketContext";
 import RecommendationPopup from "@/components/modals/RecommendationPopup";
 import { ConnectionStatus } from "@/components/common/ConnectionStatus";
 
@@ -46,6 +47,7 @@ const Chat = () => {
     acceptRecommendation: socketAcceptRecommendation,
     requestHistory,
     onReceiveMessage,
+    onReceiveChunk,
     onReceiveRecommendation,
     onChatHistory,
     onError
@@ -63,10 +65,11 @@ const Chat = () => {
   const [borderRadius, setBorderRadius] = useState(24); // Initial border radius
   const [loadingMessage, setLoadingMessage] = useState("Keji is thinking");
   const loadingTimerRef = useRef<NodeJS.Timeout | null>(null);
+  const currentChunkGroupRef = useRef<string | null>(null);
 
   // ✅ Set up WebSocket event listeners
   useEffect(() => {
-    // Handle incoming messages
+    // Handle incoming messages (short, non-chunked messages)
     const cleanupMessage = onReceiveMessage((data) => {
       console.log('📨 Received message from WebSocket:', data);
       const aiMessage: Message = {
@@ -83,6 +86,46 @@ const Chat = () => {
         loadingTimerRef.current = null;
       }
       setLoadingMessage("Keji is thinking");
+    });
+
+    // Handle incoming message chunks (long messages sent in parts)
+    const cleanupChunk = onReceiveChunk((data) => {
+      console.log('📦 Received chunk:', data.chunk_index + 1, '/', data.total_chunks);
+      
+      // First chunk - change from "thinking" to "typing" and add as first bubble
+      if (data.chunk_index === 0) {
+        setLoading(false);
+        if (loadingTimerRef.current) {
+          clearTimeout(loadingTimerRef.current);
+          loadingTimerRef.current = null;
+        }
+        setLoadingMessage("Keji is typing");
+        currentChunkGroupRef.current = data.message_group_id;
+        
+        // Add first chunk as a separate message bubble
+        const firstChunkMessage: Message = {
+          id: `${data.message_group_id}-${data.chunk_index}`,
+          text: data.chunk,
+          sender: "ai",
+          timestamp: new Date(data.timestamp),
+        };
+        setMessages((prev) => [...prev, firstChunkMessage]);
+      } else {
+        // Subsequent chunks - add each as a new bubble
+        const chunkMessage: Message = {
+          id: `${data.message_group_id}-${data.chunk_index}`,
+          text: data.chunk,
+          sender: "ai",
+          timestamp: new Date(data.timestamp),
+        };
+        setMessages((prev) => [...prev, chunkMessage]);
+      }
+      
+      // Final chunk - clear typing indicator
+      if (data.is_final) {
+        currentChunkGroupRef.current = null;
+        setLoadingMessage("Keji is thinking");
+      }
     });
 
     // Handle incoming recommendations
@@ -105,14 +148,17 @@ const Chat = () => {
     // Handle chat history
     const cleanupHistory = onChatHistory((data) => {
       console.log('📖 Received chat history from WebSocket:', data);
-      const historyMessages: Message[] = data.messages.map(
-        (m: { text: string; sender: string; timestamp: string }, index: number) => ({
-          id: `history-${index}`,
-          text: m.text,
-          sender: m.sender,
-          timestamp: new Date(m.timestamp),
-        })
-      );
+      
+      // Keep each chunk as a separate message bubble
+      const historyMessages: Message[] = data.messages.map((m, index) => ({
+        id: m.is_chunked && m.message_group_id 
+          ? `${m.message_group_id}-${m.chunk_index}` 
+          : `history-${index}`,
+        text: m.text,
+        sender: m.sender as "user" | "ai",
+        timestamp: new Date(m.timestamp),
+      }));
+      
       setMessages(historyMessages);
     });
 
@@ -138,6 +184,7 @@ const Chat = () => {
     // Cleanup all handlers on unmount
     return () => {
       cleanupMessage();
+      cleanupChunk();
       cleanupRecommendation();
       cleanupHistory();
       cleanupError();
@@ -147,7 +194,7 @@ const Chat = () => {
         loadingTimerRef.current = null;
       }
     };
-  }, [onReceiveMessage, onReceiveRecommendation, onChatHistory, onError]);
+  }, [onReceiveMessage, onReceiveChunk, onReceiveRecommendation, onChatHistory, onError]);
 
   // ✅ Fetch chat history when component mounts and socket is connected
   useEffect(() => {
@@ -191,12 +238,12 @@ const Chat = () => {
       const maxLines = 5;
       const maxHeight = lineHeight * maxLines;
 
-      let scrollHeight = textarea.scrollHeight;
+      const scrollHeight = textarea.scrollHeight;
       let lines = Math.ceil(scrollHeight / lineHeight);
 
       lines = Math.max(1, lines);
 
-      let newHeight = Math.min(Math.max(lines * lineHeight, minHeight), maxHeight);
+      const newHeight = Math.min(Math.max(lines * lineHeight, minHeight), maxHeight);
 
       let newBorderRadius = 24;
 
@@ -460,6 +507,44 @@ const Chat = () => {
                       </div>
                       <div className="text-xs text-muted-foreground flex items-center gap-0">
                         <span>{loadingMessage}</span>
+                        <span className="inline-flex">
+                          <span className="animate-[bounce_1.4s_ease-in-out_infinite]">.</span>
+                          <span className="animate-[bounce_1.4s_ease-in-out_0.2s_infinite]">.</span>
+                          <span className="animate-[bounce_1.4s_ease-in-out_0.4s_infinite]">.</span>
+                        </span>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            )}
+            
+            {/* Typing indicator when receiving chunks */}
+            {!loading && currentChunkGroupRef.current && (
+              <div className="flex justify-start">
+                <div className="flex items-end gap-2 max-w-[80%]">
+                  <div className="w-7 h-7 bg-white rounded-full overflow-hidden flex items-center justify-center mb-1">
+                    <img
+                      src="assets/Asset 1@2x.png"
+                      alt="logo"
+                      className="w-3 h-3 object-cover"
+                    />
+                  </div>
+                  <div className="bg-muted text-foreground px-4 py-3 rounded-2xl">
+                    <div className="flex flex-col gap-1">
+                      <div className="flex space-x-1">
+                        <div className="w-2 h-2 bg-muted-foreground rounded-full animate-bounce"></div>
+                        <div
+                          className="w-2 h-2 bg-muted-foreground rounded-full animate-bounce"
+                          style={{ animationDelay: "0.1s" }}
+                        ></div>
+                        <div
+                          className="w-2 h-2 bg-muted-foreground rounded-full animate-bounce"
+                          style={{ animationDelay: "0.2s" }}
+                        ></div>
+                      </div>
+                      <div className="text-xs text-muted-foreground flex items-center gap-0">
+                        <span>Keji is typing</span>
                         <span className="inline-flex">
                           <span className="animate-[bounce_1.4s_ease-in-out_infinite]">.</span>
                           <span className="animate-[bounce_1.4s_ease-in-out_0.2s_infinite]">.</span>

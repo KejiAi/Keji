@@ -44,3 +44,8 @@ class Message(db.Model):
     sender = db.Column(db.String(10), nullable=False)  # "user" or "bot"
     text = db.Column(db.Text, nullable=False)
     timestamp = db.Column(db.DateTime, default=datetime.now())
+    
+    # Chunking support for streaming messages
+    message_group_id = db.Column(db.String(36), nullable=True)  # UUID to group chunks
+    chunk_index = db.Column(db.Integer, nullable=True)  # Which chunk (0, 1, 2...)
+    total_chunks = db.Column(db.Integer, nullable=True)  # Total chunks in group

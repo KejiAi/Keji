@@ -19,10 +19,26 @@ interface SocketRecommendation {
   health?: Array<{ label: string; description: string }>;
 }
 
-interface SocketHistoryMessage {
+interface SocketChunk {
+  type: 'chat_chunk';
+  role: 'assistant';
+  chunk: string;
+  chunk_index: number;
+  total_chunks: number;
+  is_final: boolean;
+  message_group_id: string;
+  message_id: number;
+  timestamp: string;
+}
+
+export interface SocketHistoryMessage {
   text: string;
   sender: string;
   timestamp: string;
+  is_chunked?: boolean;
+  message_group_id?: string;
+  chunk_index?: number;
+  total_chunks?: number;
 }
 
 interface SocketHistory {
@@ -45,6 +61,7 @@ interface SocketContextType {
   acceptRecommendation: (title: string, content: string) => void;
   requestHistory: () => void;
   onReceiveMessage: (callback: (data: SocketMessage) => void) => () => void;
+  onReceiveChunk: (callback: (data: SocketChunk) => void) => () => void;
   onReceiveRecommendation: (callback: (data: SocketRecommendation) => void) => () => void;
   onChatHistory: (callback: (data: SocketHistory) => void) => () => void;
   onError: (callback: (data: SocketError) => void) => () => void;
@@ -71,11 +88,13 @@ export const SocketProvider: React.FC<SocketProviderProps> = ({ children }) => {
   const [connectionAttempts, setConnectionAttempts] = useState(0);
   const eventHandlersRef = useRef<{
     onReceiveMessage: Set<(data: SocketMessage) => void>;
+    onReceiveChunk: Set<(data: SocketChunk) => void>;
     onReceiveRecommendation: Set<(data: SocketRecommendation) => void>;
     onChatHistory: Set<(data: SocketHistory) => void>;
     onError: Set<(data: SocketError) => void>;
   }>({
     onReceiveMessage: new Set(),
+    onReceiveChunk: new Set(),
     onReceiveRecommendation: new Set(),
     onChatHistory: new Set(),
     onError: new Set(),
@@ -168,6 +187,17 @@ export const SocketProvider: React.FC<SocketProviderProps> = ({ children }) => {
           handler(data);
         } catch (error) {
           console.error('Error in receive_message handler:', error);
+        }
+      });
+    });
+
+    newSocket.on('receive_chunk', (data) => {
+      console.log('📦 Received chunk:', data.chunk_index + 1, '/', data.total_chunks);
+      eventHandlersRef.current.onReceiveChunk.forEach(handler => {
+        try {
+          handler(data);
+        } catch (error) {
+          console.error('Error in receive_chunk handler:', error);
         }
       });
     });
@@ -266,6 +296,14 @@ export const SocketProvider: React.FC<SocketProviderProps> = ({ children }) => {
     };
   }, []);
 
+  const onReceiveChunk = useCallback((callback: (data: SocketChunk) => void) => {
+    eventHandlersRef.current.onReceiveChunk.add(callback);
+    // Return cleanup function
+    return () => {
+      eventHandlersRef.current.onReceiveChunk.delete(callback);
+    };
+  }, []);
+
   const onReceiveRecommendation = useCallback((callback: (data: SocketRecommendation) => void) => {
     eventHandlersRef.current.onReceiveRecommendation.add(callback);
     // Return cleanup function
@@ -299,6 +337,7 @@ export const SocketProvider: React.FC<SocketProviderProps> = ({ children }) => {
     acceptRecommendation,
     requestHistory,
     onReceiveMessage,
+    onReceiveChunk,
     onReceiveRecommendation,
     onChatHistory,
     onError,

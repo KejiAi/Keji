@@ -317,12 +317,13 @@ def get_full_history_for_frontend(conversation_id: int) -> List[Dict[str, str]]:
     """
     Retrieve full conversation history for frontend display.
     This always returns ALL messages, never filtered.
+    Includes chunking metadata for messages that were sent in chunks.
     
     Args:
         conversation_id: ID of the conversation
     
     Returns:
-        List of all messages with sender, text, and timestamp
+        List of all messages with sender, text, timestamp, and optional chunk metadata
     """
     from models import Message
     
@@ -331,14 +332,28 @@ def get_full_history_for_frontend(conversation_id: int) -> List[Dict[str, str]]:
     
     logger.debug(f"Retrieved {len(messages)} messages for frontend")
     
-    return [
-        {
+    result = []
+    for msg in messages:
+        message_data = {
             "sender": msg.sender,
             "text": msg.text,
             "timestamp": msg.timestamp.isoformat()
         }
-        for msg in messages
-    ]
+        
+        # Include chunking metadata if this message is part of a chunk
+        if msg.message_group_id:
+            message_data.update({
+                "message_group_id": msg.message_group_id,
+                "chunk_index": msg.chunk_index,
+                "total_chunks": msg.total_chunks,
+                "is_chunked": True
+            })
+        else:
+            message_data["is_chunked"] = False
+        
+        result.append(message_data)
+    
+    return result
 
 
 # Configuration getters (can be overridden via environment variables)

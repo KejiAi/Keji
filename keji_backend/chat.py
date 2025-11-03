@@ -1,10 +1,13 @@
-from flask import Blueprint, request, jsonify
+from flask import Blueprint, request, jsonify, Response, stream_with_context
 from flask_login import login_required, current_user
 from extensions import db
 from models import Conversation, Message
-import random
 import os
 import logging
+import time
+import json
+import re
+import uuid
 from datetime import datetime
 from werkzeug.utils import secure_filename
 from get_response import handle_user_input
@@ -99,6 +102,41 @@ def should_send_context_info(conversation_history):
     
     return should_send_time, should_send_name, current_time 
 
+def split_into_chunks(text, max_chunk_size=150):
+    """
+    Split text into chunks of complete sentences.
+    
+    Args:
+        text: The text to split
+        max_chunk_size: Maximum characters per chunk (default 150)
+    
+    Returns:
+        list: List of text chunks
+    """
+    # Split by sentence endings (. ! ?)
+    sentences = re.split(r'([.!?]+\s+)', text)
+    
+    chunks = []
+    current_chunk = ""
+    
+    for i in range(0, len(sentences), 2):
+        sentence = sentences[i]
+        punctuation = sentences[i + 1] if i + 1 < len(sentences) else ""
+        full_sentence = sentence + punctuation
+        
+        # If adding this sentence exceeds max_chunk_size and current_chunk is not empty
+        if current_chunk and len(current_chunk) + len(full_sentence) > max_chunk_size:
+            chunks.append(current_chunk.strip())
+            current_chunk = full_sentence
+        else:
+            current_chunk += full_sentence
+    
+    # Add remaining chunk
+    if current_chunk.strip():
+        chunks.append(current_chunk.strip())
+    
+    return chunks if chunks else [text]  # Return original text if no splits
+
 def call_llm(messages, user_name=None, conversation_history=None, time_of_day=None):
     """
     Call the real Keji AI implementation with conversation context.
@@ -184,6 +222,9 @@ def call_llm(messages, user_name=None, conversation_history=None, time_of_day=No
 @chat_bp.route("/chat", methods=["POST"])
 @login_required
 def chat():
+    # Check if streaming is requested
+    stream_response = request.args.get('stream', 'false').lower() == 'true'
+    
     try:
         user_message = request.form.get("message")
         
@@ -196,7 +237,7 @@ def chat():
         
         files = request.files.getlist("files")
         
-        logger.info(f"HTTP chat request from {current_user.name}: {len(user_message)} chars")
+        logger.info(f"HTTP chat request from {current_user.name}: {len(user_message)} chars (stream={stream_response})")
     except Exception as e:
         logger.error(f"Error validating chat request: {str(e)}", exc_info=True)
         return jsonify({"error": "Invalid request"}), 400
@@ -267,21 +308,85 @@ def chat():
         if isinstance(bot_reply, dict) and bot_reply.get("type") == "recommendation":
             # Don't save to DB yet
             logger.info(f"Recommendation: {bot_reply.get('title', 'N/A')}")
+            
+            # For recommendations, always return immediately (no streaming)
             return jsonify(bot_reply), 200
         else:
-            # Normal chat: save immediately
+            # Normal chat response
             reply_text = bot_reply.get("content") if isinstance(bot_reply, dict) else str(bot_reply)
             
             if not reply_text:
                 logger.warning("Empty reply from AI, using fallback")
                 reply_text = "Yeah, how can I help you?"
             
-            bot_msg = Message(conversation_id=conversation.id, sender="bot", text=reply_text)
-            db.session.add(bot_msg)
-            db.session.commit()
+            # Decide if we should chunk this message
+            should_chunk = stream_response and len(reply_text) > 100
             
-            logger.info("Chat message saved and sent")
-            return jsonify({"type": "chat", "role": "assistant", "content": reply_text}), 200
+            if should_chunk:
+                # Split into chunks and save each chunk as separate message
+                chunks = split_into_chunks(reply_text, max_chunk_size=150)
+                message_group_id = str(uuid.uuid4())  # Generate unique ID for this message group
+                logger.info(f"Saving {len(chunks)} chunks with group ID: {message_group_id}")
+                
+                # Save all chunks to database
+                for i, chunk in enumerate(chunks):
+                    chunk_msg = Message(
+                        conversation_id=conversation.id,
+                        sender="bot",
+                        text=chunk,
+                        message_group_id=message_group_id,
+                        chunk_index=i,
+                        total_chunks=len(chunks)
+                    )
+                    db.session.add(chunk_msg)
+                
+                db.session.commit()
+                logger.info(f"All {len(chunks)} chunks saved to database")
+                
+                # Stream chunks to frontend
+                def generate():
+                    for i, chunk in enumerate(chunks):
+                        # Calculate delay based on chunk length (simulate realistic typing)
+                        if i > 0:  # No delay before first chunk
+                            base_delay = 0.8
+                            typing_speed = 40  # characters per second (realistic fast typing)
+                            typing_time = len(chunk) / typing_speed
+                            delay = base_delay + typing_time
+                            
+                            logger.debug(f"Chunk {i+1}/{len(chunks)}: {len(chunk)} chars, waiting {delay:.2f}s")
+                            time.sleep(delay)
+                        
+                        chunk_data = {
+                            "chunk": chunk,
+                            "chunk_index": i,
+                            "total_chunks": len(chunks),
+                            "is_final": i == len(chunks) - 1,
+                            "message_group_id": message_group_id
+                        }
+                        yield f"data: {json.dumps(chunk_data)}\n\n"
+                    
+                    logger.info("All chunks sent via streaming")
+                
+                return Response(
+                    stream_with_context(generate()),
+                    mimetype='text/event-stream',
+                    headers={
+                        'Cache-Control': 'no-cache',
+                        'X-Accel-Buffering': 'no'
+                    }
+                )
+            else:
+                # Save as single message (no chunking)
+                bot_msg = Message(
+                    conversation_id=conversation.id,
+                    sender="bot",
+                    text=reply_text
+                )
+                db.session.add(bot_msg)
+                db.session.commit()
+                
+                logger.info("Chat message saved and sent (no streaming)")
+                return jsonify({"type": "chat", "role": "assistant", "content": reply_text}), 200
             
     except Exception as e:
         logger.error(f"Error saving bot response: {str(e)}", exc_info=True)

@@ -148,7 +148,7 @@ const Start = () => {
                   aria-label="Continue with Google"
                   asChild
                 >
-                  <a href={`${getBackendUrl()}/auth/google`}>
+                  <a href={`${getBackendUrl()}/login/google`}>
                     <img
                       src="/assets/All Icon Used/devicon_google.png"
                       alt=""

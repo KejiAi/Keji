@@ -1,4 +1,4 @@
-from flask import Blueprint, request, jsonify, session, make_response, redirect, current_app
+from flask import Blueprint, request, jsonify, session, make_response, redirect, current_app, url_for
 from extensions import db
 import string
 from models import User
@@ -11,6 +11,7 @@ from dotenv import load_dotenv
 from datetime import datetime, timedelta
 import subprocess
 import json
+from authlib.integrations.flask_client import OAuth
 
 
 load_dotenv()
@@ -19,6 +20,20 @@ logger = logging.getLogger(__name__)
 
 auth_bp = Blueprint("auth", __name__)
 serializer = URLSafeTimedSerializer(os.getenv('SECRET_KEY'))
+
+# Initialize OAuth
+oauth = OAuth()
+
+# Configure Google OAuth
+oauth.register(
+    name='google',
+    client_id=os.getenv('GOOGLE_CLIENT_ID'),
+    client_secret=os.getenv('GOOGLE_CLIENT_SECRET'),
+    server_metadata_url='https://accounts.google.com/.well-known/openid-configuration',
+    client_kwargs={
+        'scope': 'openid email profile'
+    }
+)
 
 # Configure Resend
 RESEND_API_KEY = os.getenv("RESEND_API_KEY")
@@ -353,7 +368,7 @@ def login():
     password = data.get("password")
 
     logger.debug(f"Login attempt for email: {email}")
-
+    
     user = User.query.filter_by(email=email).first()
     if not user or not user.check_password(password):
         logger.warning(f"Login failed: Invalid credentials for email: {email}")
@@ -622,3 +637,102 @@ def init_scheduler(app):
     if not scheduler.running:
         scheduler.start()
         logger.info("Background scheduler started with cleanup and keep-alive jobs")
+
+
+# ==================== GOOGLE OAUTH ROUTES ====================
+
+@auth_bp.route("/login/google", methods=["GET"])
+def google_login():
+    """
+    Redirect user to Google's OAuth page for authentication.
+    """
+    logger.info("Initiating Google OAuth login")
+    
+    # Generate callback URL
+    redirect_uri = url_for('auth.google_callback', _external=True)
+    logger.debug(f"Generated callback URL: {redirect_uri}")
+    
+    # Redirect to Google OAuth
+    return oauth.google.authorize_redirect(redirect_uri)
+
+
+@auth_bp.route("/login/callback", methods=["GET"])
+def google_callback():
+    """
+    Handle Google OAuth callback.
+    Retrieves user info, creates/updates user in database, and logs them in.
+    """
+    logger.info("Google OAuth callback received")
+    
+    try:
+        # Get access token from Google
+        token = oauth.google.authorize_access_token()
+        logger.debug("Access token received from Google")
+        
+        # Get user info from Google
+        user_info = token.get('userinfo')
+        if not user_info:
+            logger.error("No userinfo in token response")
+            return redirect(f"{os.getenv('FRONTEND_BASE_URL')}/start?error=auth_failed")
+        
+        email = user_info.get('email')
+        name = user_info.get('name')
+        google_id = user_info.get('sub')  # Google's unique user ID
+        
+        logger.info(f"Google user info retrieved: email={email}, name={name}, google_id={google_id}")
+        
+        if not email:
+            logger.error("No email provided by Google")
+            return redirect(f"{os.getenv('FRONTEND_BASE_URL')}/start?error=no_email")
+        
+        # Check if user exists
+        user = User.query.filter_by(email=email.lower()).first()
+        
+        if user:
+            # User exists - update their info if needed
+            logger.info(f"Existing user found: {user.email} (ID: {user.id})")
+            
+            # Update name if it changed
+            if user.name != name:
+                user.name = name
+                logger.debug(f"Updated user name to: {name}")
+            
+            # Mark as verified (Google verifies emails)
+            if not user.is_verified:
+                user.is_verified = True
+                user.verification_code = None
+                user.verification_token = None
+                logger.info(f"User {user.email} marked as verified via Google OAuth")
+            
+            db.session.commit()
+        else:
+            # Create new user
+            logger.info(f"Creating new user from Google OAuth: {email}")
+            
+            # Generate a random password (user won't use it, they'll use Google Sign-In)
+            random_password = ''.join(random.choices(string.ascii_letters + string.digits, k=32))
+            
+            user = User(
+                name=name or email.split('@')[0],  # Use email username if no name provided
+                email=email.lower(),
+                is_verified=True,  # Google-authenticated users are automatically verified
+                verification_code=None,
+                verification_token=None
+            )
+            user.set_password(random_password)
+            
+            db.session.add(user)
+            db.session.commit()
+            logger.info(f"New user created successfully: {user.email} (ID: {user.id})")
+        
+        # Log the user in
+        login_user(user, remember=True)
+        session.permanent = True
+        logger.info(f"User logged in successfully via Google OAuth: {user.name} ({user.email})")
+        
+        # Redirect to homepage
+        return redirect(f"{os.getenv('FRONTEND_BASE_URL')}/homepage")
+        
+    except Exception as e:
+        logger.error(f"Error in Google OAuth callback: {str(e)}", exc_info=True)
+        return redirect(f"{os.getenv('FRONTEND_BASE_URL')}/start?error=auth_failed")

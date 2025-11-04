@@ -107,8 +107,11 @@ logger = setup_logging(app)
 logger.info("Flask application starting up...")
 
 from models import User
-from auth import auth_bp
+from auth import auth_bp, oauth
 app.register_blueprint(auth_bp)
+
+# Initialize OAuth with app
+oauth.init_app(app)
 
 from chat import chat_bp
 app.register_blueprint(chat_bp)

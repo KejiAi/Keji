@@ -12,6 +12,7 @@ from datetime import datetime, timedelta
 import subprocess
 import json
 from authlib.integrations.flask_client import OAuth
+import eventlet.tpool
 
 
 load_dotenv()
@@ -641,6 +642,24 @@ def init_scheduler(app):
 
 # ==================== GOOGLE OAUTH ROUTES ====================
 
+def _generate_oauth_redirect_in_thread(redirect_uri):
+    """
+    Helper function to generate OAuth redirect URL.
+    Runs in a real thread to avoid Eventlet SSL conflicts if authlib
+    needs to fetch metadata from Google's well-known endpoint.
+    """
+    return oauth.google.authorize_redirect(redirect_uri)
+
+
+def _exchange_oauth_token_in_thread():
+    """
+    Helper function to exchange OAuth authorization code for access token.
+    Runs in a real thread to avoid Eventlet SSL conflicts.
+    This is similar to how we handle OpenAI API calls.
+    """
+    return oauth.google.authorize_access_token()
+
+
 @auth_bp.route("/login/google", methods=["GET"])
 def google_login():
     """
@@ -652,8 +671,9 @@ def google_login():
     redirect_uri = url_for('auth.google_callback', _external=True)
     logger.debug(f"Generated callback URL: {redirect_uri}")
     
-    # Redirect to Google OAuth
-    return oauth.google.authorize_redirect(redirect_uri)
+    # Redirect to Google OAuth (run in real thread to avoid Eventlet SSL conflicts)
+    logger.debug("Generating OAuth redirect in real thread...")
+    return eventlet.tpool.execute(_generate_oauth_redirect_in_thread, redirect_uri)
 
 
 @auth_bp.route("/login/callback", methods=["GET"])
@@ -665,8 +685,9 @@ def google_callback():
     logger.info("Google OAuth callback received")
     
     try:
-        # Get access token from Google
-        token = oauth.google.authorize_access_token()
+        # Get access token from Google (run in real thread to avoid Eventlet SSL conflicts)
+        logger.debug("Exchanging OAuth code for access token in real thread...")
+        token = eventlet.tpool.execute(_exchange_oauth_token_in_thread)
         logger.debug("Access token received from Google")
         
         # Get user info from Google

@@ -12,7 +12,6 @@ from datetime import datetime, timedelta
 import subprocess
 import json
 from authlib.integrations.flask_client import OAuth
-import eventlet.tpool
 
 
 load_dotenv()
@@ -642,22 +641,49 @@ def init_scheduler(app):
 
 # ==================== GOOGLE OAUTH ROUTES ====================
 
-def _generate_oauth_redirect_in_thread(redirect_uri):
+def _generate_oauth_redirect_subprocess(redirect_uri, client_id, client_secret, server_metadata_url):
     """
-    Helper function to generate OAuth redirect URL.
-    Runs in a real thread to avoid Eventlet SSL conflicts if authlib
-    needs to fetch metadata from Google's well-known endpoint.
+    Generate OAuth redirect URL using subprocess isolation.
+    This completely isolates the OAuth library from Eventlet's SSL patching.
     """
-    return oauth.google.authorize_redirect(redirect_uri)
-
-
-def _exchange_oauth_token_in_thread():
-    """
-    Helper function to exchange OAuth authorization code for access token.
-    Runs in a real thread to avoid Eventlet SSL conflicts.
-    This is similar to how we handle OpenAI API calls.
-    """
-    return oauth.google.authorize_access_token()
+    try:
+        cmd = [
+            'python',
+            os.path.join(os.path.dirname(__file__), 'oauth_helper.py'),
+            'redirect',
+            redirect_uri,
+            client_id,
+            client_secret,
+            server_metadata_url
+        ]
+        
+        result = subprocess.run(
+            cmd,
+            capture_output=True,
+            text=True,
+            timeout=30
+        )
+        
+        if result.returncode == 0:
+            response_data = json.loads(result.stdout)
+            if response_data.get('success'):
+                return response_data.get('authorization_url'), response_data.get('state')
+            else:
+                error_msg = response_data.get('error', 'Unknown error')
+                logger.error(f"OAuth redirect generation failed: {error_msg}")
+                raise Exception(f"OAuth redirect failed: {error_msg}")
+        else:
+            error_data = json.loads(result.stdout) if result.stdout else {}
+            error_msg = error_data.get('error', 'Unknown error')
+            logger.error(f"OAuth redirect subprocess failed: {error_msg}")
+            raise Exception(f"OAuth redirect subprocess failed: {error_msg}")
+            
+    except subprocess.TimeoutExpired:
+        logger.error("OAuth redirect generation timed out after 30 seconds")
+        raise Exception("OAuth redirect generation timed out")
+    except Exception as e:
+        logger.error(f"Error generating OAuth redirect: {str(e)}", exc_info=True)
+        raise
 
 
 @auth_bp.route("/login/google", methods=["GET"])
@@ -671,9 +697,73 @@ def google_login():
     redirect_uri = url_for('auth.google_callback', _external=True)
     logger.debug(f"Generated callback URL: {redirect_uri}")
     
-    # Redirect to Google OAuth (run in real thread to avoid Eventlet SSL conflicts)
-    logger.debug("Generating OAuth redirect in real thread...")
-    return eventlet.tpool.execute(_generate_oauth_redirect_in_thread, redirect_uri)
+    # Generate OAuth redirect URL using subprocess (isolated from Eventlet)
+    try:
+        logger.debug("Generating OAuth redirect via subprocess...")
+        client_id = os.getenv('GOOGLE_CLIENT_ID')
+        client_secret = os.getenv('GOOGLE_CLIENT_SECRET')
+        server_metadata_url = 'https://accounts.google.com/.well-known/openid-configuration'
+        
+        authorization_url, state = _generate_oauth_redirect_subprocess(
+            redirect_uri, client_id, client_secret, server_metadata_url
+        )
+        
+        # Store state in session for CSRF protection
+        session['oauth_state'] = state
+        session.permanent = True
+        
+        logger.debug(f"OAuth redirect URL generated successfully, state: {state[:10]}...")
+        return redirect(authorization_url)
+        
+    except Exception as e:
+        logger.error(f"Failed to generate OAuth redirect: {str(e)}", exc_info=True)
+        return redirect(f"{os.getenv('FRONTEND_BASE_URL')}/start?error=oauth_failed")
+
+
+def _exchange_oauth_token_subprocess(authorization_code, redirect_uri, client_id, client_secret, server_metadata_url):
+    """
+    Exchange OAuth authorization code for access token using subprocess isolation.
+    This completely isolates the OAuth library from Eventlet's SSL patching.
+    """
+    try:
+        cmd = [
+            'python',
+            os.path.join(os.path.dirname(__file__), 'oauth_helper.py'),
+            'token',
+            authorization_code,
+            redirect_uri,
+            client_id,
+            client_secret,
+            server_metadata_url
+        ]
+        
+        result = subprocess.run(
+            cmd,
+            capture_output=True,
+            text=True,
+            timeout=30
+        )
+        
+        if result.returncode == 0:
+            response_data = json.loads(result.stdout)
+            if response_data.get('success'):
+                return response_data.get('token'), response_data.get('userinfo')
+            else:
+                error_msg = response_data.get('error', 'Unknown error')
+                logger.error(f"OAuth token exchange failed: {error_msg}")
+                raise Exception(f"OAuth token exchange failed: {error_msg}")
+        else:
+            error_data = json.loads(result.stdout) if result.stdout else {}
+            error_msg = error_data.get('error', 'Unknown error')
+            logger.error(f"OAuth token exchange subprocess failed: {error_msg}")
+            raise Exception(f"OAuth token exchange subprocess failed: {error_msg}")
+            
+    except subprocess.TimeoutExpired:
+        logger.error("OAuth token exchange timed out after 30 seconds")
+        raise Exception("OAuth token exchange timed out")
+    except Exception as e:
+        logger.error(f"Error exchanging OAuth token: {str(e)}", exc_info=True)
+        raise
 
 
 @auth_bp.route("/login/callback", methods=["GET"])
@@ -685,13 +775,36 @@ def google_callback():
     logger.info("Google OAuth callback received")
     
     try:
-        # Get access token from Google (run in real thread to avoid Eventlet SSL conflicts)
-        logger.debug("Exchanging OAuth code for access token in real thread...")
-        token = eventlet.tpool.execute(_exchange_oauth_token_in_thread)
-        logger.debug("Access token received from Google")
+        # Verify state parameter for CSRF protection
+        state = request.args.get('state')
+        stored_state = session.get('oauth_state')
         
-        # Get user info from Google
-        user_info = token.get('userinfo')
+        if not state or state != stored_state:
+            logger.warning(f"OAuth state mismatch: received={state}, stored={stored_state}")
+            return redirect(f"{os.getenv('FRONTEND_BASE_URL')}/start?error=state_mismatch")
+        
+        # Clear state from session
+        session.pop('oauth_state', None)
+        
+        # Get authorization code
+        authorization_code = request.args.get('code')
+        if not authorization_code:
+            logger.error("No authorization code in callback")
+            return redirect(f"{os.getenv('FRONTEND_BASE_URL')}/start?error=no_code")
+        
+        # Exchange code for token using subprocess (isolated from Eventlet)
+        logger.debug("Exchanging OAuth code for access token via subprocess...")
+        redirect_uri = url_for('auth.google_callback', _external=True)
+        client_id = os.getenv('GOOGLE_CLIENT_ID')
+        client_secret = os.getenv('GOOGLE_CLIENT_SECRET')
+        server_metadata_url = 'https://accounts.google.com/.well-known/openid-configuration'
+        
+        token, user_info = _exchange_oauth_token_subprocess(
+            authorization_code, redirect_uri, client_id, client_secret, server_metadata_url
+        )
+        
+        logger.debug("Access token and user info received from Google")
+        
         if not user_info:
             logger.error("No userinfo in token response")
             return redirect(f"{os.getenv('FRONTEND_BASE_URL')}/start?error=auth_failed")

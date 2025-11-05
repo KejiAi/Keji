@@ -18,6 +18,10 @@ load_dotenv()
 
 logger = logging.getLogger(__name__)
 
+# Get the directory where this script is located (for subprocess helpers)
+SCRIPT_DIR = os.path.abspath(os.path.dirname(__file__) or os.getcwd())
+logger.info(f"Auth module initialized, script directory: {SCRIPT_DIR}")
+
 auth_bp = Blueprint("auth", __name__)
 serializer = URLSafeTimedSerializer(os.getenv('SECRET_KEY'))
 
@@ -61,7 +65,7 @@ def send_email(to_email, subject, html_content, text_content=None):
         # Build command to run email helper in isolated subprocess
         cmd = [
             'python',
-            os.path.join(os.path.dirname(__file__), 'send_email_helper.py'),
+            os.path.join(SCRIPT_DIR, 'send_email_helper.py'),
             RESEND_API_KEY,
             RESEND_FROM_EMAIL,
             to_email,
@@ -647,9 +651,12 @@ def _generate_oauth_redirect_subprocess(redirect_uri, client_id, client_secret, 
     This completely isolates the OAuth library from Eventlet's SSL patching.
     """
     try:
+        helper_path = os.path.join(SCRIPT_DIR, 'oauth_helper.py')
+        logger.debug(f"Using OAuth helper at: {helper_path}")
+        
         cmd = [
             'python',
-            os.path.join(os.path.dirname(__file__), 'oauth_helper.py'),
+            helper_path,
             'redirect',
             redirect_uri,
             client_id,
@@ -671,11 +678,15 @@ def _generate_oauth_redirect_subprocess(redirect_uri, client_id, client_secret, 
             else:
                 error_msg = response_data.get('error', 'Unknown error')
                 logger.error(f"OAuth redirect generation failed: {error_msg}")
+                if 'traceback' in response_data:
+                    logger.error(f"Traceback: {response_data['traceback']}")
                 raise Exception(f"OAuth redirect failed: {error_msg}")
         else:
+            logger.error(f"OAuth redirect subprocess failed with code {result.returncode}")
+            logger.error(f"STDOUT: {result.stdout}")
+            logger.error(f"STDERR: {result.stderr}")
             error_data = json.loads(result.stdout) if result.stdout else {}
             error_msg = error_data.get('error', 'Unknown error')
-            logger.error(f"OAuth redirect subprocess failed: {error_msg}")
             raise Exception(f"OAuth redirect subprocess failed: {error_msg}")
             
     except subprocess.TimeoutExpired:
@@ -726,9 +737,12 @@ def _exchange_oauth_token_subprocess(authorization_code, redirect_uri, client_id
     This completely isolates the OAuth library from Eventlet's SSL patching.
     """
     try:
+        helper_path = os.path.join(SCRIPT_DIR, 'oauth_helper.py')
+        logger.debug(f"Using OAuth helper at: {helper_path}")
+        
         cmd = [
             'python',
-            os.path.join(os.path.dirname(__file__), 'oauth_helper.py'),
+            helper_path,
             'token',
             authorization_code,
             redirect_uri,
@@ -751,11 +765,15 @@ def _exchange_oauth_token_subprocess(authorization_code, redirect_uri, client_id
             else:
                 error_msg = response_data.get('error', 'Unknown error')
                 logger.error(f"OAuth token exchange failed: {error_msg}")
+                if 'traceback' in response_data:
+                    logger.error(f"Traceback: {response_data['traceback']}")
                 raise Exception(f"OAuth token exchange failed: {error_msg}")
         else:
+            logger.error(f"OAuth token exchange subprocess failed with code {result.returncode}")
+            logger.error(f"STDOUT: {result.stdout}")
+            logger.error(f"STDERR: {result.stderr}")
             error_data = json.loads(result.stdout) if result.stdout else {}
             error_msg = error_data.get('error', 'Unknown error')
-            logger.error(f"OAuth token exchange subprocess failed: {error_msg}")
             raise Exception(f"OAuth token exchange subprocess failed: {error_msg}")
             
     except subprocess.TimeoutExpired:

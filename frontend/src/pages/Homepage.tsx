@@ -182,10 +182,10 @@ const Homepage = () => {
                   className="absolute right-0 mt-2 w-32 bg-white shadow-lg rounded-xl border border-border overflow-hidden z-50"
                 >
                   <button
-                    onClick={() => navigate("/report")}
+                    onClick={() => navigate("/chat")}
                     className="block w-full px-4 py-2 text-sm text-left hover:bg-gray-100"
                   >
-                    Report
+                    Chat
                   </button>
                   <button
                     onClick={() => navigate("/profile")}
@@ -193,6 +193,12 @@ const Homepage = () => {
                   >
                     Profile
                   </button>
+                  {/* <button
+                    onClick={() => navigate("/report")}
+                    className="block w-full px-4 py-2 text-sm text-left hover:bg-gray-100"
+                  >
+                    Report
+                  </button> */}
                   <button
                     onClick={handleLogout}
                     className="block w-full px-4 py-2 text-sm text-left hover:bg-gray-100 text-red-600"

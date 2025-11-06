@@ -187,10 +187,10 @@ Keji AI Team
         .button {{ 
             display: inline-block; 
             padding: 12px 24px; 
-            background-color: #4CAF50; 
-            color: white; 
+            background-color: #FF542E; 
+            color: #FFFFFF !important; 
             text-decoration: none; 
-            border-radius: 5px; 
+            border-radius: 12px; 
             margin: 20px 0;
         }}
         .code {{ 
@@ -202,6 +202,7 @@ Keji AI Team
             border-radius: 5px; 
             display: inline-block;
             margin: 10px 0;
+            color: #FF542E;
         }}
     </style>
 </head>
@@ -341,7 +342,7 @@ def resend_code():
             border-radius: 5px; 
             display: inline-block;
             margin: 20px 0;
-            color: #4CAF50;
+            color: #FF542E;
         }}
     </style>
 </head>
@@ -440,15 +441,15 @@ The Keji Team
         .reset-button {{ 
             display: inline-block;
             padding: 15px 30px;
-            background-color: #4CAF50;
-            color: white;
+            background-color: #FF542E;
+            color: #FFFFFF !important;
             text-decoration: none;
-            border-radius: 5px;
+            border-radius: 12px;
             font-weight: bold;
             margin: 20px 0;
         }}
         .reset-button:hover {{
-            background-color: #45a049;
+            background-color: #E64924;
         }}
     </style>
 </head>
@@ -582,6 +583,41 @@ def check_session():
     
     logger.debug("Session check failed - user not authenticated")
     return jsonify({"loggedIn": False}), 401
+
+
+@auth_bp.route("/update-name", methods=["POST"])
+@login_required
+def update_name():
+    data = request.get_json() or {}
+    new_name = (data.get("name") or "").strip()
+
+    if not new_name:
+        logger.warning("Update name failed: empty name provided")
+        return jsonify({"error": "Name is required"}), 400
+
+    if len(new_name) < 2:
+        return jsonify({"error": "Name must be at least 2 characters"}), 400
+
+    if len(new_name) > 60:
+        return jsonify({"error": "Name must be 60 characters or less"}), 400
+
+    current_user.name = new_name
+    db.session.commit()
+    logger.info(f"User name updated: {current_user.email} -> {new_name}")
+
+    fname = new_name.split()[0] if new_name else ""
+    initial = fname[0].upper() if fname else ""
+
+    updated_user = {
+        "loggedIn": True,
+        "id": current_user.id,
+        "name": new_name,
+        "fname": fname,
+        "email": current_user.email,
+        "initial": initial,
+    }
+
+    return jsonify({"message": "Name updated successfully", "user": updated_user}), 200
 
 
 # The scheduler will call this function at the specified interval

@@ -43,6 +43,7 @@ const Chat = () => {
   const { 
     isConnected,
     isReconnecting, 
+    hasSyncedHistory,
     sendMessage: socketSendMessage, 
     acceptRecommendation: socketAcceptRecommendation,
     requestHistory,
@@ -416,9 +417,21 @@ const Chat = () => {
               </Button>
               {/* Connection indicator */}
               <div className="flex items-center gap-2 mr-4">
-                <div className={`w-2 h-2 rounded-full ${isConnected ? 'bg-green-500' : 'bg-red-500'}`} />
+                <div
+                  className={`w-2 h-2 rounded-full ${
+                    isConnected
+                      ? hasSyncedHistory
+                        ? 'bg-green-500'
+                        : 'bg-yellow-500'
+                      : 'bg-red-500'
+                  }`}
+                />
                 <span className="text-xs text-muted-foreground">
-                  {isConnected ? 'Connected' : 'Disconnected'}
+                  {isConnected
+                    ? hasSyncedHistory
+                      ? 'Connected'
+                      : 'Syncing history...'
+                    : 'Disconnected'}
                 </span>
               </div>
             </header>

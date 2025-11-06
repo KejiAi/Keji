@@ -165,13 +165,13 @@ const Start = () => {
               {!isLogin && (
                 <div className="space-y-1">
                   <Label htmlFor="name" className="font-geist text-lg">
-                    What name should I call you?
+                    Preferred name
                   </Label>
                   <Input
                     id="name"
                     name="name"
                     type="text"
-                    placeholder="e.g Timee, or John"
+                    placeholder="What should Keji call you?"
                     className="h-16 rounded-2xl text-lg md:text-lg"
                     required={!isLogin}
                   />

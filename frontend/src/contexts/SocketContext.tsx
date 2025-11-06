@@ -1,6 +1,8 @@
 import React, { createContext, useContext, useEffect, useState, useCallback, useRef } from 'react';
 import { io, Socket } from 'socket.io-client';
+import type { ManagerOptions, SocketOptions } from 'socket.io-client';
 import { getBackendUrl } from '@/lib/utils';
+import { useSession } from '@/contexts/SessionContext';
 
 // Type definitions for WebSocket messages
 interface SocketMessage {
@@ -57,6 +59,7 @@ interface SocketContextType {
   isConnected: boolean;
   isReconnecting: boolean;
   connectionAttempts: number;
+  hasSyncedHistory: boolean;
   sendMessage: (message: string, files?: File[]) => void;
   acceptRecommendation: (title: string, content: string) => void;
   requestHistory: () => void;
@@ -86,6 +89,9 @@ export const SocketProvider: React.FC<SocketProviderProps> = ({ children }) => {
   const [isConnected, setIsConnected] = useState(false);
   const [isReconnecting, setIsReconnecting] = useState(false);
   const [connectionAttempts, setConnectionAttempts] = useState(0);
+  const [hasSyncedHistory, setHasSyncedHistory] = useState(false);
+  const { isAuthenticated, isLoading: sessionLoading } = useSession();
+  const socketRef = useRef<Socket | null>(null);
   const eventHandlersRef = useRef<{
     onReceiveMessage: Set<(data: SocketMessage) => void>;
     onReceiveChunk: Set<(data: SocketChunk) => void>;
@@ -101,11 +107,43 @@ export const SocketProvider: React.FC<SocketProviderProps> = ({ children }) => {
   });
 
   useEffect(() => {
-    // Initialize socket connection
+    if (sessionLoading) {
+      return;
+    }
+
+    if (!isAuthenticated) {
+      if (socketRef.current) {
+        console.log('🔌 Closing WebSocket connection (user not authenticated)');
+        socketRef.current.close();
+        socketRef.current = null;
+      }
+      setSocket(null);
+      setIsConnected(false);
+      setIsReconnecting(false);
+      setConnectionAttempts(0);
+      setHasSyncedHistory(false);
+      return;
+    }
+
+    if (socketRef.current) {
+      if (!socketRef.current.connected) {
+        console.log('🔄 Attempting to reconnect existing socket instance');
+        socketRef.current.connect();
+      }
+      setSocket(socketRef.current);
+      return;
+    }
+
+    // Initialize socket connection once session is ready and authenticated
     const backendUrl = getBackendUrl();
     console.log('🔌 Initializing WebSocket connection to:', backendUrl);
 
-    const newSocket = io(backendUrl, {
+    type ExtendedSocketOptions = Partial<ManagerOptions & SocketOptions> & {
+      pingTimeout?: number;
+      pingInterval?: number;
+    };
+
+    const socketOptions: ExtendedSocketOptions = {
       withCredentials: true,
       transports: ['websocket', 'polling'],
       reconnection: true,
@@ -114,19 +152,21 @@ export const SocketProvider: React.FC<SocketProviderProps> = ({ children }) => {
       reconnectionDelayMax: 5000, // Max 5 seconds between retries
       randomizationFactor: 0.5, // Add randomness to prevent thundering herd
       timeout: 120000, // 2 minutes timeout for initial connection
-      // No timeout for message responses - wait indefinitely
-      ackTimeout: 300000, // 5 minutes for acknowledgments (very long processing)
       // Keep connection alive with aggressive ping/pong
       pingTimeout: 60000, // 60 seconds - wait 60s for pong response
       pingInterval: 25000, // 25 seconds - send ping every 25s
-    });
+    };
 
+    const newSocket = io(backendUrl, socketOptions);
+
+    socketRef.current = newSocket;
     // Connection event handlers
     newSocket.on('connect', () => {
       console.log('✅ WebSocket connected');
       setIsConnected(true);
       setIsReconnecting(false);
       setConnectionAttempts(0);
+      setHasSyncedHistory(false);
     });
 
     newSocket.on('connected', (data) => {
@@ -134,11 +174,13 @@ export const SocketProvider: React.FC<SocketProviderProps> = ({ children }) => {
       setIsConnected(true);
       setIsReconnecting(false);
       setConnectionAttempts(0);
+      setHasSyncedHistory(false);
     });
 
     newSocket.on('disconnect', (reason) => {
       console.log('❌ WebSocket disconnected:', reason);
       setIsConnected(false);
+      setHasSyncedHistory(false);
       
       // Only show reconnecting if it's an unexpected disconnect
       if (reason === 'io server disconnect') {
@@ -215,6 +257,7 @@ export const SocketProvider: React.FC<SocketProviderProps> = ({ children }) => {
 
     newSocket.on('chat_history', (data) => {
       console.log('📖 Received chat history:', data);
+      setHasSyncedHistory(true);
       eventHandlersRef.current.onChatHistory.forEach(handler => {
         try {
           handler(data);
@@ -249,8 +292,11 @@ export const SocketProvider: React.FC<SocketProviderProps> = ({ children }) => {
     return () => {
       console.log('🔌 Closing WebSocket connection');
       newSocket.close();
+      if (socketRef.current === newSocket) {
+        socketRef.current = null;
+      }
     };
-  }, []);
+  }, [isAuthenticated, sessionLoading]);
 
   const sendMessage = useCallback((message: string, files?: File[]) => {
     if (!socket || !isConnected) {
@@ -285,6 +331,7 @@ export const SocketProvider: React.FC<SocketProviderProps> = ({ children }) => {
     }
 
     console.log('📖 Requesting chat history');
+    setHasSyncedHistory(false);
     socket.emit('request_history');
   }, [socket, isConnected]);
 
@@ -333,6 +380,7 @@ export const SocketProvider: React.FC<SocketProviderProps> = ({ children }) => {
     isConnected,
     isReconnecting,
     connectionAttempts,
+    hasSyncedHistory,
     sendMessage,
     acceptRecommendation,
     requestHistory,

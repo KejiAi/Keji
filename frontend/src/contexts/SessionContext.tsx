@@ -18,6 +18,7 @@ interface SessionContextType {
   isAuthenticated: boolean;
   isLoading: boolean;
   login: (userData: User) => void;
+  updateUserName: (name: string) => void;
   logout: () => Promise<void>;
   checkSession: () => Promise<boolean>;
 }
@@ -76,6 +77,28 @@ export const SessionProvider: React.FC<SessionProviderProps> = ({ children }) =>
     localStorage.setItem('isLoggedIn', 'true');
   };
 
+  const updateUserName = (name: string) => {
+    setUser(prev => {
+      if (!prev) {
+        return prev;
+      }
+
+      const trimmed = name.trim();
+      const firstName = trimmed.split(' ')[0] || trimmed;
+      const initial = firstName.charAt(0).toUpperCase();
+
+      const updatedUser = {
+        ...prev,
+        name: trimmed,
+        fname: firstName,
+        initial,
+      };
+
+      localStorage.setItem('user', JSON.stringify(updatedUser));
+      return updatedUser;
+    });
+  };
+
   const logout = async (): Promise<void> => {
     // Clear local state immediately for better UX
     setUser(null);
@@ -122,6 +145,7 @@ export const SessionProvider: React.FC<SessionProviderProps> = ({ children }) =>
     isAuthenticated,
     isLoading,
     login,
+    updateUserName,
     logout,
     checkSession,
   };

@@ -8,6 +8,8 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { getBackendUrl } from "@/lib/utils";
 import { useSession } from "@/contexts/SessionContext";
+import { Input } from "@/components/ui/input";
+import { useToast } from "@/hooks/use-toast";
 
 interface UserData {
   name?: string;
@@ -17,8 +19,16 @@ interface UserData {
 }
 
 const Profile = () => {
-  const { user, logout, isLoading } = useSession();
+  const { user, logout, isLoading, updateUserName } = useSession();
+  const { toast } = useToast();
   const navigate = useNavigate();
+  const [isEditingName, setIsEditingName] = useState(false);
+  const [nameInput, setNameInput] = useState(user?.name || "");
+  const [isSavingName, setIsSavingName] = useState(false);
+
+  useEffect(() => {
+    setNameInput(user?.name || "");
+  }, [user?.name]);
 
   const handleLogout = async () => {
     await logout();
@@ -26,7 +36,7 @@ const Profile = () => {
 
   const settingsItems = [
     // { icon: "assets/All Icon Used/mdi_password.png", label: "Password", onClick: () => {} },
-    { icon: "assets/All Icon Used/mingcute_voice-fill.png", label: "Change tone", onClick: () => {} },
+    { icon: "assets/All Icon Used/mingcute_voice-fill.png", label: "Chat Style", onClick: () => {} },
     { icon: "assets/All Icon Used/mage_star-fill.png", label: "Favourites", onClick: () => {} },
   ];
 
@@ -36,6 +46,61 @@ const Profile = () => {
     { icon: "assets/All Icon Used/hugeicons_agreement-03.png", label: "Terms & Conditions", onClick: () => {} },
     { icon: "assets/All Icon Used/basil_logout-outline.png", label: "Logout", onClick: handleLogout },
   ];
+
+  const handleNameSave = async () => {
+    const trimmed = nameInput.trim();
+    if (trimmed.length < 2) {
+      toast({
+        title: "Name too short",
+        description: "Name must be at least 2 characters.",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    if (trimmed === user?.name) {
+      setIsEditingName(false);
+      return;
+    }
+
+    setIsSavingName(true);
+    try {
+      const response = await fetch(`${getBackendUrl()}/update-name`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        credentials: "include",
+        body: JSON.stringify({ name: trimmed }),
+      });
+
+      const data = await response.json();
+
+      if (response.ok) {
+        if (data.user?.name) {
+          updateUserName(data.user.name);
+        }
+        toast({
+          title: "Name updated",
+          description: "Your profile name has been updated.",
+        });
+        setIsEditingName(false);
+      } else {
+        toast({
+          title: "Update failed",
+          description: data.error || "Could not update your name. Please try again.",
+          variant: "destructive",
+        });
+      }
+    } catch (error) {
+      console.error("Name update error:", error);
+      toast({
+        title: "Network error",
+        description: "Something went wrong. Please try again later.",
+        variant: "destructive",
+      });
+    } finally {
+      setIsSavingName(false);
+    }
+  };
 
   if (isLoading) {
     return (
@@ -70,14 +135,53 @@ const Profile = () => {
           </Avatar>
           
           <div className="flex-1">
-            <h2 className="text-xl font-semibold text-foreground">
-              {user?.fname || "User"}
-            </h2>
+            {isEditingName ? (
+              <div className="flex flex-col sm:flex-row sm:items-center gap-3">
+                <Input
+                  value={nameInput}
+                  onChange={(e) => setNameInput(e.target.value)}
+                  placeholder="Enter your name"
+                  disabled={isSavingName}
+                  className="h-12 rounded-2xl text-lg"
+                />
+                <div className="flex items-center gap-2">
+                  <Button
+                    onClick={handleNameSave}
+                    disabled={isSavingName}
+                    className="px-4"
+                  >
+                    {isSavingName ? "Saving..." : "Save"}
+                  </Button>
+                  <Button
+                    variant="outline"
+                    onClick={() => {
+                      setIsEditingName(false);
+                      setNameInput(user?.name || "");
+                    }}
+                    disabled={isSavingName}
+                    className="px-4"
+                  >
+                    Cancel
+                  </Button>
+                </div>
+              </div>
+            ) : (
+              <h2 className="text-xl font-semibold text-foreground">
+                {user?.name || "User"}
+              </h2>
+            )}
           </div>
           
-          <Button variant="ghost" size="icon" className="text-muted-foreground">
-            <img src="assets/All Icon Used/iconamoon_edit-thin.png" className="h-6 w-6" />
-          </Button>
+          {!isEditingName && (
+            <Button
+              variant="ghost"
+              size="icon"
+              className="text-muted-foreground"
+              onClick={() => setIsEditingName(true)}
+            >
+              <img src="assets/All Icon Used/iconamoon_edit-thin.png" className="h-6 w-6" />
+            </Button>
+          )}
         </div>
 
         {/* Food Status Card */}

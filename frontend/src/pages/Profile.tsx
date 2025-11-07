@@ -10,6 +10,7 @@ import { getBackendUrl } from "@/lib/utils";
 import { useSession } from "@/contexts/SessionContext";
 import { Input } from "@/components/ui/input";
 import { useToast } from "@/hooks/use-toast";
+import ChatStyleModal from "@/components/modals/ChatStyleModal";
 
 interface UserData {
   name?: string;
@@ -19,16 +20,22 @@ interface UserData {
 }
 
 const Profile = () => {
-  const { user, logout, isLoading, updateUserName } = useSession();
+  const { user, logout, isLoading, updateUserName, updateChatStyle } = useSession();
   const { toast } = useToast();
   const navigate = useNavigate();
   const [isEditingName, setIsEditingName] = useState(false);
   const [nameInput, setNameInput] = useState(user?.name || "");
   const [isSavingName, setIsSavingName] = useState(false);
+  const [isChatStyleModalOpen, setIsChatStyleModalOpen] = useState(false);
+  const [chatStyle, setChatStyle] = useState(user?.chat_style || "pure_english");
 
   useEffect(() => {
     setNameInput(user?.name || "");
   }, [user?.name]);
+
+  useEffect(() => {
+    setChatStyle(user?.chat_style || "pure_english");
+  }, [user?.chat_style]);
 
   const handleLogout = async () => {
     await logout();
@@ -36,7 +43,7 @@ const Profile = () => {
 
   const settingsItems = [
     // { icon: "assets/All Icon Used/mdi_password.png", label: "Password", onClick: () => {} },
-    { icon: "assets/All Icon Used/mingcute_voice-fill.png", label: "Chat Style", onClick: () => {} },
+    { icon: "assets/All Icon Used/mingcute_voice-fill.png", label: "Chat Style", onClick: () => setIsChatStyleModalOpen(true) },
     { icon: "assets/All Icon Used/mage_star-fill.png", label: "Favourites", onClick: () => {} },
   ];
 
@@ -235,6 +242,16 @@ const Profile = () => {
           </CardContent>
         </div>
       </div>
+
+      <ChatStyleModal
+        isOpen={isChatStyleModalOpen}
+        onClose={() => setIsChatStyleModalOpen(false)}
+        currentStyle={chatStyle}
+        onStyleUpdate={(style) => {
+          setChatStyle(style);
+          updateChatStyle(style);
+        }}
+      />
     </PageContainer>
   );
 };

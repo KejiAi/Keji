@@ -9,6 +9,7 @@ interface User {
   fname: string;
   email: string;
   initial: string;
+  chat_style: string;
   time?: string;
   greet?: string;
 }
@@ -19,6 +20,7 @@ interface SessionContextType {
   isLoading: boolean;
   login: (userData: User) => void;
   updateUserName: (name: string) => void;
+  updateChatStyle: (style: string) => void;
   logout: () => Promise<void>;
   checkSession: () => Promise<boolean>;
 }
@@ -44,6 +46,14 @@ export const SessionProvider: React.FC<SessionProviderProps> = ({ children }) =>
 
   const isAuthenticated = !!user;
 
+  const normalizeUser = (userData: User): User => {
+    const style = userData.chat_style || "pure_english";
+    return {
+      ...userData,
+      chat_style: style,
+    };
+  };
+
   const checkSession = async (): Promise<boolean> => {
     try {
       const response = await fetch(`${getBackendUrl()}/check-session`, {
@@ -51,7 +61,8 @@ export const SessionProvider: React.FC<SessionProviderProps> = ({ children }) =>
       });
 
       if (response.ok) {
-        const userData = await response.json();
+        const rawData = await response.json();
+        const userData = normalizeUser(rawData);
         setUser(userData);
         localStorage.setItem('user', JSON.stringify(userData));
         localStorage.setItem('isLoggedIn', 'true');
@@ -72,8 +83,9 @@ export const SessionProvider: React.FC<SessionProviderProps> = ({ children }) =>
   };
 
   const login = (userData: User) => {
-    setUser(userData);
-    localStorage.setItem('user', JSON.stringify(userData));
+    const normalized = normalizeUser(userData);
+    setUser(normalized);
+    localStorage.setItem('user', JSON.stringify(normalized));
     localStorage.setItem('isLoggedIn', 'true');
   };
 
@@ -92,6 +104,22 @@ export const SessionProvider: React.FC<SessionProviderProps> = ({ children }) =>
         name: trimmed,
         fname: firstName,
         initial,
+      };
+
+      localStorage.setItem('user', JSON.stringify(updatedUser));
+      return updatedUser;
+    });
+  };
+
+  const updateChatStyle = (style: string) => {
+    setUser(prev => {
+      if (!prev) {
+        return prev;
+      }
+
+      const updatedUser = {
+        ...prev,
+        chat_style: style,
       };
 
       localStorage.setItem('user', JSON.stringify(updatedUser));
@@ -146,6 +174,7 @@ export const SessionProvider: React.FC<SessionProviderProps> = ({ children }) =>
     isLoading,
     login,
     updateUserName,
+    updateChatStyle,
     logout,
     checkSession,
   };

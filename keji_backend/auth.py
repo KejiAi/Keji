@@ -244,7 +244,8 @@ Keji AI Team
             email=email,
             is_verified=False,
             verification_code=code,
-            verification_token=token
+            verification_token=token,
+            chat_style="pure_english",
         )
         user.set_password(password)
         db.session.add(user)
@@ -523,6 +524,22 @@ def reset_password():
     return jsonify({"message": "Password reset successful"}), 200
 
 
+def _serialize_user(user):
+    fname = user.name.split()[0] if user.name else ""
+    initial = fname[0].upper() if fname else ""
+    chat_style = user.chat_style or "pure_english"
+
+    return {
+        "loggedIn": True,
+        "id": user.id,
+        "name": user.name,
+        "fname": fname,
+        "email": user.email,
+        "initial": initial,
+        "chat_style": chat_style,
+    }
+
+
 @auth_bp.route("/logout", methods=["POST"])
 @login_required
 def logout():
@@ -564,13 +581,16 @@ def check_session():
         fname = current_user.name.split()[0] if current_user.name else ""
         time_of_day = get_greeting()
 
+        chat_style = current_user.chat_style or "pure_english"
+
         user_data = {
             "loggedIn": True,
             "id": current_user.id,
             "name": current_user.name,
             "fname": fname,
             "email": current_user.email,
-            "initial": initial
+            "initial": initial,
+            "chat_style": chat_style,
         }
 
         if type(time_of_day) == dict:
@@ -608,16 +628,35 @@ def update_name():
     fname = new_name.split()[0] if new_name else ""
     initial = fname[0].upper() if fname else ""
 
-    updated_user = {
-        "loggedIn": True,
-        "id": current_user.id,
-        "name": new_name,
-        "fname": fname,
-        "email": current_user.email,
-        "initial": initial,
-    }
+    updated_user = _serialize_user(current_user)
 
     return jsonify({"message": "Name updated successfully", "user": updated_user}), 200
+
+
+@auth_bp.route("/update-chat-style", methods=["POST"])
+@login_required
+def update_chat_style():
+    data = request.get_json() or {}
+    chat_style = data.get("chat_style")
+
+    valid_styles = {
+        "pure_english",
+        "more_english",
+        "mix",
+        "more_pidgin",
+        "pure_pidgin",
+    }
+
+    if chat_style not in valid_styles:
+        logger.warning(f"Invalid chat style provided: {chat_style}")
+        return jsonify({"error": "Invalid chat style"}), 400
+
+    current_user.chat_style = chat_style
+    db.session.commit()
+    logger.info(f"Chat style updated for user {current_user.email} -> {chat_style}")
+
+    updated_user = _serialize_user(current_user)
+    return jsonify({"message": "Chat style updated successfully", "user": updated_user}), 200
 
 
 # The scheduler will call this function at the specified interval
@@ -905,7 +944,8 @@ def google_callback():
                 email=email.lower(),
                 is_verified=True,  # Google-authenticated users are automatically verified
                 verification_code=None,
-                verification_token=None
+                verification_token=None,
+                chat_style="pure_english",
             )
             user.set_password(random_password)
             

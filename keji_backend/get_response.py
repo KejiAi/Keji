@@ -74,7 +74,15 @@ def classify_llm(prompt, conversation_history=None):
     return result
 
 
-def call_llm(prompt, keji_prompt_path=None, user_name=None, additional_context=None, conversation_history=None, time_of_day=None):
+def call_llm(
+    prompt,
+    keji_prompt_path=None,
+    user_name=None,
+    additional_context=None,
+    conversation_history=None,
+    time_of_day=None,
+    chat_style=None,
+):
     """
     Call the LLM with Keji's personality and return structured response.
     
@@ -85,6 +93,7 @@ def call_llm(prompt, keji_prompt_path=None, user_name=None, additional_context=N
         additional_context: Optional dict with extra context (budget info, food options, etc.)
         conversation_history: Optional list of previous messages (includes memory summary if available)
         time_of_day: Optional time period ('morning', 'afternoon', 'evening', 'night')
+        chat_style: Optional user chat style preference
     
     Returns:
         dict: Structured response with 'type', 'role', 'content', and optionally 'title' and 'health'
@@ -101,15 +110,30 @@ def call_llm(prompt, keji_prompt_path=None, user_name=None, additional_context=N
 
     # Build the user message with context
     user_message = prompt
+    context_payload = dict(additional_context or {})
+
+    if chat_style:
+        logger.debug(f"Chat style preference: {chat_style}")
+        context_payload.setdefault("chat_style", chat_style)
+
+        style_instructions = {
+            "pure_english": "Respond purely in English with zero pidgin words. Keep tone friendly and natural.",
+            "more_english": "Respond mostly in English with at most one subtle pidgin expression if it fits naturally.",
+            "mix": "Blend English and Nigerian pidgin evenly while keeping sentences clear and respectful.",
+            "more_pidgin": "Use mostly Nigerian pidgin with occasional English words for clarity.",
+            "pure_pidgin": "Respond entirely in Nigerian pidgin while staying friendly and respectful.",
+        }
+        style_note = style_instructions.get(chat_style, style_instructions["pure_english"])
+        user_message = f"Chat style preference: {chat_style}\nInstruction: {style_note}\n{user_message}"
     if user_name:
         logger.debug(f"User name: {user_name}")
         user_message = f"User name: {user_name}\n{user_message}"
     if time_of_day:
         logger.debug(f"Time of day: {time_of_day}")
         user_message = f"Time of day: {time_of_day}\n{user_message}"
-    if additional_context:
-        logger.debug(f"Additional context: {list(additional_context.keys())}")
-        user_message += f"\n\nContext: {json.dumps(additional_context, ensure_ascii=False)}"
+    if context_payload:
+        logger.debug(f"Additional context: {list(context_payload.keys())}")
+        user_message += f"\n\nContext: {json.dumps(context_payload, ensure_ascii=False)}"
     
     logger.debug(f"User message: {len(user_message)} chars")
     logger.debug("Sending request to OpenAI...")
@@ -296,7 +320,7 @@ def get_meals_by_ingredients(ingredients):
         return []
 
 
-def handle_user_input(user_input, user_name=None, conversation_history=None, time_of_day=None):
+def handle_user_input(user_input, user_name=None, conversation_history=None, time_of_day=None, chat_style=None):
     """
     Handle user input, classify intent, and return appropriate structured response.
     
@@ -322,10 +346,19 @@ def handle_user_input(user_input, user_name=None, conversation_history=None, tim
             "decision": decision,
             "note": "User has decided on what to eat"
         }
+        if chat_style:
+            context["chat_style"] = chat_style
         prompt = f"User has decided to eat '{decision}'. Confirm their choice with a SHORT, encouraging message (1-2 sentences). Be friendly and supportive!"
         logger.debug(f"   Confirming user's decision: {decision}")
         
-        result = call_llm(prompt, user_name=user_name, additional_context=context, conversation_history=conversation_history, time_of_day=time_of_day)
+        result = call_llm(
+            prompt,
+            user_name=user_name,
+            additional_context=context,
+            conversation_history=conversation_history,
+            time_of_day=time_of_day,
+            chat_style=chat_style,
+        )
         logger.info("Decision confirmation generated")
         return result
     
@@ -342,8 +375,17 @@ def handle_user_input(user_input, user_name=None, conversation_history=None, tim
                 "foods_available": [],
                 "note": "Budget is too small for available options"
             }
+            if chat_style:
+                context["chat_style"] = chat_style
             prompt = f"User has ₦{budget} but no food options are available within their budget. Respond with empathy and humor."
-            result = call_llm(prompt, user_name=user_name, additional_context=context, conversation_history=conversation_history, time_of_day=time_of_day)
+            result = call_llm(
+                prompt,
+                user_name=user_name,
+                additional_context=context,
+                conversation_history=conversation_history,
+                time_of_day=time_of_day,
+                chat_style=chat_style,
+            )
             logger.info("Low budget response generated")
             return result
         else:
@@ -354,12 +396,21 @@ def handle_user_input(user_input, user_name=None, conversation_history=None, tim
                 "available_foods": foods,
                 "note": f"These {len(foods)} food options are within the user's budget"
             }
+            if chat_style:
+                context["chat_style"] = chat_style
             
             # Always recommend ONE meal, regardless of how many options
             prompt = f"User has ₦{budget} to spend. Pick the BEST option from the {len(foods)} available foods and recommend it. Keep content SHORT (2-3 sentences max) with where to get it and a quick tip. Include health benefits."
             logger.debug(f"   Picking best from {len(foods)} options for RECOMMENDATION")
             
-            result = call_llm(prompt, user_name=user_name, additional_context=context, conversation_history=conversation_history, time_of_day=time_of_day)
+            result = call_llm(
+                prompt,
+                user_name=user_name,
+                additional_context=context,
+                conversation_history=conversation_history,
+                time_of_day=time_of_day,
+                chat_style=chat_style,
+            )
             logger.info("Food recommendation generated")
             return result
 
@@ -376,8 +427,17 @@ def handle_user_input(user_input, user_name=None, conversation_history=None, tim
                 "meals_found": [],
                 "note": "No exact matches in database"
             }
+            if chat_style:
+                context["chat_style"] = chat_style
             prompt = f"User has these ingredients: {', '.join(ingredients)}. No exact matches found. Suggest ONE creative meal idea they can make. Keep it SHORT (2-3 sentences)."
-            result = call_llm(prompt, user_name=user_name, additional_context=context, conversation_history=conversation_history, time_of_day=time_of_day)
+            result = call_llm(
+                prompt,
+                user_name=user_name,
+                additional_context=context,
+                conversation_history=conversation_history,
+                time_of_day=time_of_day,
+                chat_style=chat_style,
+            )
             logger.info("Creative meal suggestions generated")
             return result
         else:
@@ -388,12 +448,21 @@ def handle_user_input(user_input, user_name=None, conversation_history=None, tim
                 "matching_meals": foods,
                 "note": f"Found {len(foods)} meals that use these ingredients"
             }
+            if chat_style:
+                context["chat_style"] = chat_style
             
             # Always recommend ONE meal, regardless of how many options
             prompt = f"User has these ingredients: {', '.join(ingredients)}. Pick the BEST meal from the {len(foods)} options and recommend it. Keep content SHORT (2-3 sentences max) with a quick cooking tip. Include health benefits."
             logger.debug(f"   Picking best from {len(foods)} options for RECOMMENDATION")
             
-            result = call_llm(prompt, user_name=user_name, additional_context=context, conversation_history=conversation_history, time_of_day=time_of_day)
+            result = call_llm(
+                prompt,
+                user_name=user_name,
+                additional_context=context,
+                conversation_history=conversation_history,
+                time_of_day=time_of_day,
+                chat_style=chat_style,
+            )
             logger.info("Ingredient-based recommendation generated")
             return result
 
@@ -401,7 +470,17 @@ def handle_user_input(user_input, user_name=None, conversation_history=None, tim
         # General chat - no specific intent detected
         logger.info("Processing CHAT intent")
         chat_message = intent.get("chat", user_input)
-        result = call_llm(chat_message, user_name=user_name, conversation_history=conversation_history, time_of_day=time_of_day)
+        context = {}
+        if chat_style:
+            context["chat_style"] = chat_style
+        result = call_llm(
+            chat_message,
+            user_name=user_name,
+            additional_context=context or None,
+            conversation_history=conversation_history,
+            time_of_day=time_of_day,
+            chat_style=chat_style,
+        )
         logger.info("Chat response generated")
         return result
 

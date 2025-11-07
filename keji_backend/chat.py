@@ -137,7 +137,7 @@ def split_into_chunks(text, max_chunk_size=150):
     
     return chunks if chunks else [text]  # Return original text if no splits
 
-def call_llm(messages, user_name=None, conversation_history=None, time_of_day=None):
+def call_llm(messages, user_name=None, conversation_history=None, time_of_day=None, chat_style=None):
     """
     Call the real Keji AI implementation with conversation context.
     
@@ -161,6 +161,8 @@ def call_llm(messages, user_name=None, conversation_history=None, time_of_day=No
             logger.debug(f"User name: {user_name}")
         if time_of_day:
             logger.debug(f"Time of day: {time_of_day}")
+        if chat_style:
+            logger.debug(f"Chat style: {chat_style}")
 
         # Extract the latest user message
         if messages and len(messages) > 0:
@@ -176,10 +178,11 @@ def call_llm(messages, user_name=None, conversation_history=None, time_of_day=No
         
         # Call the real Keji AI implementation with conversation history
         response = handle_user_input(
-            user_input, 
+            user_input,
             user_name=user_name,
             conversation_history=conversation_history,
-            time_of_day=time_of_day
+            time_of_day=time_of_day,
+            chat_style=chat_style,
         )
         
         # Validate response
@@ -283,6 +286,7 @@ def chat():
         
         # 5. Determine context info
         send_time, send_name, time_of_day = should_send_context_info(history)
+        chat_style = getattr(current_user, "chat_style", "pure_english") or "pure_english"
         
         # 6. Call AI
         logger.info("Processing with AI...")
@@ -290,7 +294,8 @@ def chat():
             messages,
             user_name=current_user.name if send_name else None,
             conversation_history=filtered_history,
-            time_of_day=time_of_day if send_time else None
+            time_of_day=time_of_day if send_time else None,
+            chat_style=chat_style,
         )
         logger.info("AI response received")
 

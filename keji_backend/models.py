@@ -13,6 +13,7 @@ class User(UserMixin, db.Model):
     email = db.Column(db.String(150), unique=True, nullable=False)
     password_hash = db.Column(db.String(256), nullable=False)
     is_verified = db.Column(db.Boolean, default=False)
+    chat_style = db.Column(db.String(50), default="pure_english")
     verification_code = db.Column(db.String(6), nullable=True)
     verification_token = db.Column(db.String(255), nullable=True)
     created_at = db.Column(db.DateTime, default=datetime.now())

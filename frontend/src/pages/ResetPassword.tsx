@@ -69,7 +69,7 @@ const ResetPassword = () => {
   if (success) {
     return (
       <PageContainer variant="static">
-        <SEO title="Password Reset Successful" />
+        <SEO title="Password Reset Successful" description="Your password has been successfully reset" />
         <div className="min-h-screen flex items-center justify-center px-4">
           <div className="w-full max-w-md text-center">
             <div className="mb-6">
@@ -89,7 +89,7 @@ const ResetPassword = () => {
 
   return (
     <PageContainer variant="static">
-      <SEO title="Reset Password" />
+      <SEO title="Reset Password" description="Reset your Keji AI account password" />
       <div className="min-h-screen flex items-center justify-center px-4">
         <div className="w-full max-w-md">
           <div className="text-center mb-8">

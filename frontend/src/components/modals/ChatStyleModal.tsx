@@ -20,10 +20,10 @@ interface ChatStyleModalProps {
 
 const chatStyles = [
   { value: "pure_english", label: "Pure English" },
-  { value: "more_english", label: "More English (80%)" },
-  { value: "mix", label: "50-50 Mix" },
-  { value: "more_pidgin", label: "More Pidgin (80%)" },
-  { value: "pure_pidgin", label: "Pure Pidgin" },
+  { value: "more_english", label: "80% English" }, // { value: "more_english", label: "More English (80%)" },
+  // { value: "mix", label: "50-50 Mix" },
+  // { value: "more_pidgin", label: "More Pidgin (80%)" },
+  { value: "pure_pidgin", label: "Street Padi" }, // { value: "pure_pidgin", label: "Pure Pidgin" },
 ];
 
 const ChatStyleModal = ({ isOpen, onClose, currentStyle = "pure_english", onStyleUpdate }: ChatStyleModalProps) => {
@@ -79,20 +79,20 @@ const ChatStyleModal = ({ isOpen, onClose, currentStyle = "pure_english", onStyl
     <Dialog open={isOpen} onOpenChange={onClose}>
       <DialogContent hideClose className="sm:max-w-md">
         <DialogHeader>
-          <DialogTitle className="text-2xl font-semibold text-foreground">
+          <DialogTitle className="text-3xl font-semibold text-foreground">
             Choose how you want me to talk:
           </DialogTitle>
         </DialogHeader>
         
-        <div className="py-4">
+        <div className="py-6">
           <RadioGroup value={selectedStyle} onValueChange={setSelectedStyle}>
-            <div className="space-y-3">
+            <div className="space-y-5">
               {chatStyles.map((style) => (
-                <div key={style.value} className="flex items-center space-x-3">
+                <div key={style.value} className="flex items-center space-x-5">
                   <RadioGroupItem value={style.value} id={style.value} />
                   <Label
                     htmlFor={style.value}
-                    className="text-lg font-normal cursor-pointer flex-1"
+                    className="text-xl font-normal cursor-pointer flex-1"
                   >
                     {style.label}
                   </Label>

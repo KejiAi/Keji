@@ -30,7 +30,7 @@ def _get_openai_client():
 TOKEN_THRESHOLD = 3000  # When to trigger summarization (leave room for response)
 RECENT_MESSAGES_COUNT = 10  # Number of recent messages to include (5 user + 5 bot turns)
 MODEL_FOR_SUMMARY = "gpt-4o-mini"  # Cheaper model for summarization
-MODEL_FOR_CHAT = "gpt-5"  # Main model for chat
+MODEL_FOR_CHAT = "gpt-4o"  # Main model for chat (upgraded version)
 
 def count_tokens(text: str, model: str = "gpt-4") -> int:
     """
@@ -252,10 +252,24 @@ def process_conversation_context(
         .order_by(Message.timestamp.asc()).all()
     
     # Convert to dict format
-    message_dicts = [
-        {"role": msg.sender if msg.sender != "bot" else "assistant", "content": msg.text}
-        for msg in all_messages
-    ]
+    message_dicts = []
+    for msg in all_messages:
+        content = msg.text or ""
+        attachments = getattr(msg, "attachments", []) or []
+        if attachments:
+            attachment_lines = []
+            for attachment in attachments:
+                attachment_desc = attachment.filename or "file"
+                if attachment.content_type:
+                    attachment_desc = f"{attachment_desc} ({attachment.content_type})"
+                attachment_lines.append(f"[Attachment: {attachment_desc} -> {attachment.url}]")
+            attachment_text = "\n".join(attachment_lines)
+            content = f"{content}\n{attachment_text}" if content else attachment_text
+
+        message_dicts.append({
+            "role": msg.sender if msg.sender != "bot" else "assistant",
+            "content": content
+        })
     
     logger.info(f"Total messages in history: {len(message_dicts)}")
     if conversation.memory_summary:
@@ -335,10 +349,23 @@ def get_full_history_for_frontend(conversation_id: int) -> List[Dict[str, str]]:
     result = []
     for msg in messages:
         message_data = {
+            "message_id": msg.id,
             "sender": msg.sender,
             "text": msg.text,
             "timestamp": msg.timestamp.isoformat()
         }
+
+        attachments = getattr(msg, "attachments", []) or []
+        if attachments:
+            message_data["attachments"] = [
+                {
+                    "name": attachment.filename,
+                    "url": attachment.url,
+                    "type": attachment.content_type,
+                    "size": attachment.size_bytes
+                }
+                for attachment in attachments
+            ]
         
         # Include chunking metadata if this message is part of a chunk
         if msg.message_group_id:

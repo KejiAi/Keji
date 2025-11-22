@@ -2,7 +2,11 @@ from flask import request
 from flask_login import current_user
 from flask_socketio import emit, join_room, leave_room, disconnect
 from extensions import socketio, db
-from models import Conversation, Message
+from models import Conversation, Message, MessageAttachment
+
+
+MAX_ATTACHMENTS = 2
+
 from get_response import handle_user_input
 from context_manager import (
     process_conversation_context,
@@ -13,9 +17,57 @@ import logging
 import time
 import uuid
 import re
+import os
+import mimetypes
+from pathlib import Path
+
+import certifi
+
+try:
+    import cloudinary
+    from cloudinary.uploader import upload as cloudinary_upload
+except ImportError:
+    cloudinary = None
+    cloudinary_upload = None
+
+# Ensure reliable SSL certificates for external requests (avoids OpenSSL issues)
+os.environ.setdefault("SSL_CERT_FILE", certifi.where())
+os.environ.setdefault("REQUESTS_CA_BUNDLE", certifi.where())
 
 # Create logger for this module
 logger = logging.getLogger(__name__)
+
+# Check if we're in production mode
+ENVIRONMENT = os.getenv("FLASK_ENV", "development").strip().lower()
+IS_PRODUCTION = ENVIRONMENT == "production"
+
+# Configure Cloudinary (if credentials are present)
+CLOUDINARY_CLOUD_NAME = os.getenv("CLOUDINARY_CLOUD_NAME")
+CLOUDINARY_API_KEY = os.getenv("CLOUDINARY_API_KEY")
+CLOUDINARY_API_SECRET = os.getenv("CLOUDINARY_API_SECRET")
+CLOUDINARY_UPLOAD_FOLDER = os.getenv("CLOUDINARY_UPLOAD_FOLDER", "keji/uploads")
+
+CLOUDINARY_ENABLED = all([
+    cloudinary is not None,
+    cloudinary_upload is not None,
+    CLOUDINARY_CLOUD_NAME,
+    CLOUDINARY_API_KEY,
+    CLOUDINARY_API_SECRET,
+])
+
+if CLOUDINARY_ENABLED:
+    cloudinary.config(
+        cloud_name=CLOUDINARY_CLOUD_NAME,
+        api_key=CLOUDINARY_API_KEY,
+        api_secret=CLOUDINARY_API_SECRET,
+        secure=True,
+    )
+    logger.info("Cloudinary configured successfully for image uploads")
+else:
+    if cloudinary is None or cloudinary_upload is None:
+        logger.warning("cloudinary package not available; file uploads will be skipped")
+    else:
+        logger.warning("Cloudinary credentials missing; file uploads will be skipped")
 
 def get_time_of_day():
     """
@@ -131,7 +183,85 @@ def split_into_chunks(text, max_chunk_size=150):
     
     return chunks if chunks else [text]  # Return original text if no splits
 
-def call_llm(messages, user_name=None, conversation_history=None, time_of_day=None, chat_style=None):
+
+def _cloudinary_upload_data_uri(data_uri, public_id, resource_type="image"):
+    """
+    Upload a data URI string to Cloudinary using a real thread (avoids eventlet SSL issues).
+    """
+    if not CLOUDINARY_ENABLED:
+        raise RuntimeError("Cloudinary is not configured")
+
+    import eventlet.tpool
+
+    def _call():
+        upload_options = {
+            "resource_type": resource_type,
+            "public_id": public_id,
+            "overwrite": False,
+        }
+        if CLOUDINARY_UPLOAD_FOLDER:
+            upload_options["folder"] = CLOUDINARY_UPLOAD_FOLDER
+        return cloudinary_upload(data_uri, **upload_options)
+
+    return eventlet.tpool.execute(_call)
+
+
+def upload_images_to_cloudinary(file_payloads):
+    """
+    Upload a list of file payloads (with base64 data) to Cloudinary.
+    
+    Args:
+        file_payloads: List of dicts with keys 'name', 'type', 'data'
+    
+    Returns:
+        tuple: (uploaded_files, errors)
+            uploaded_files: List of dicts with 'name' and 'url'
+            errors: List of error strings for files that failed
+    """
+    if not CLOUDINARY_ENABLED:
+        logger.warning("Cloudinary not configured; skipping image uploads")
+        return [], ["Cloudinary not configured"]
+
+    uploaded_files = []
+    errors = []
+
+    for index, payload in enumerate(file_payloads):
+        name = payload.get("name") or f"upload-{index}"
+        mime_type = (payload.get("type") or mimetypes.guess_type(name)[0] or "application/octet-stream").lower()
+        base64_data = payload.get("data")
+        size = payload.get("size")
+
+        if not base64_data:
+            errors.append(f"{name}: missing file data")
+            continue
+
+        if not mime_type.startswith("image/"):
+            errors.append(f"{name}: unsupported file type ({mime_type})")
+            continue
+
+        data_uri = f"data:{mime_type};base64,{base64_data}"
+        public_id = f"{Path(name).stem}-{uuid.uuid4().hex[:8]}"
+
+        try:
+            result = _cloudinary_upload_data_uri(data_uri, public_id, resource_type="image")
+            url = result.get("secure_url") or result.get("url")
+            if url:
+                uploaded_files.append({
+                    "name": name,
+                    "url": url,
+                    "type": mime_type,
+                    "size": size,
+                    "base64": base64_data  # Store base64 for vision API
+                })
+            else:
+                errors.append(f"{name}: upload succeeded but URL missing")
+        except Exception as upload_error:
+            logger.error(f"Cloudinary upload failed for {name}: {upload_error}", exc_info=True)
+            errors.append(f"{name}: upload failed")
+
+    return uploaded_files, errors
+
+def call_llm(messages, user_name=None, conversation_history=None, time_of_day=None, chat_style=None, image_base64_data=None):
     """
     Call the real Keji AI implementation with conversation context.
     
@@ -140,6 +270,7 @@ def call_llm(messages, user_name=None, conversation_history=None, time_of_day=No
         user_name: Optional user's name for personalization
         conversation_history: Filtered conversation history for context (includes memory summary)
         time_of_day: Optional time period ('morning', 'afternoon', 'evening', 'night')
+        image_base64_data: Optional list of dicts with 'base64' and 'mime_type' for vision API
     
     Returns:
         dict: Structured response (chat or recommendation) from Keji AI
@@ -157,6 +288,8 @@ def call_llm(messages, user_name=None, conversation_history=None, time_of_day=No
             logger.debug(f"Time of day: {time_of_day}")
         if chat_style:
             logger.debug(f"Chat style: {chat_style}")
+        if image_base64_data:
+            logger.debug(f"Image base64 data: {len(image_base64_data)} image(s)")
 
         # Extract the latest user message
         if messages and len(messages) > 0:
@@ -177,6 +310,7 @@ def call_llm(messages, user_name=None, conversation_history=None, time_of_day=No
             conversation_history=conversation_history,
             time_of_day=time_of_day,
             chat_style=chat_style,
+            image_base64_data=image_base64_data,
         )
         
         # Validate response
@@ -263,13 +397,62 @@ def handle_send_message(data):
             emit('error', {'message': 'Invalid data format'})
             return
         
-        user_message = data.get('message', '')
-        files = data.get('files', [])  # For future file support
+        raw_user_message = data.get('message', '')
+        if not isinstance(raw_user_message, str):
+            raw_user_message = str(raw_user_message)
+        
+        client_message_id = data.get('client_message_id')
+        if client_message_id is not None and not isinstance(client_message_id, str):
+            client_message_id = str(client_message_id)
+
+        raw_files = data.get('files', [])
+        file_names = []
+        file_payloads = []
+        if isinstance(raw_files, list):
+            if len(raw_files) > MAX_ATTACHMENTS:
+                emit('error', {'message': f'You can upload at most {MAX_ATTACHMENTS} files per message.'})
+                return
+            for index, file_item in enumerate(raw_files):
+                filename = None
+                file_data = None
+                content_type = None
+                size = None
+
+                if isinstance(file_item, dict):
+                    filename = (
+                        file_item.get('name')
+                        or file_item.get('filename')
+                        or file_item.get('originalname')
+                    )
+                    file_data = file_item.get('data')
+                    content_type = file_item.get('type')
+                    size = file_item.get('size')
+                elif isinstance(file_item, str):
+                    filename = file_item
+
+                clean_name = str(filename).strip() if filename else f"upload-{index}"
+                if clean_name:
+                    file_names.append(clean_name)
+
+                if isinstance(file_item, dict) and file_data:
+                    file_payloads.append({
+                        "name": clean_name,
+                        "data": file_data,
+                        "type": content_type,
+                        "size": size,
+                    })
+        
+        has_files = len(file_names) > 0 or len(file_payloads) > 0
         
         # Validate message
-        if not user_message or not user_message.strip():
-            emit('error', {'message': 'Empty message'})
-            return
+        if not raw_user_message or not raw_user_message.strip():
+            if not has_files:
+                emit('error', {'message': 'Empty message'})
+                return
+            # Files only – keep the persisted message empty so filenames do not appear in chat bubbles
+            user_message = ""
+        else:
+            user_message = raw_user_message.strip()
         
         # Limit message length to prevent abuse
         if len(user_message) > 5000:
@@ -277,6 +460,7 @@ def handle_send_message(data):
             return
         
         logger.info(f"New message from {current_user.name}: {len(user_message)} chars")
+        user_message_for_context = user_message
         
     except Exception as e:
         logger.error(f"Error validating message: {str(e)}", exc_info=True)
@@ -309,9 +493,141 @@ def handle_send_message(data):
         # Emit confirmation that message was received
         emit('message_saved', {
             'message_id': user_msg.id,
-            'timestamp': user_msg.timestamp.isoformat()
+            'timestamp': user_msg.timestamp.isoformat(),
+            'client_message_id': client_message_id
         })
+
+        # 2b. If files were attached, confirm receipt with filenames (development only)
+        # In production, skip this message as the LLM response is sufficient
+        if file_names and not IS_PRODUCTION:
+            if len(file_names) == 1:
+                ack_text = f"Got your file '{file_names[0]}'."
+            else:
+                joined_names = ", ".join(file_names[:-1])
+                last_name = file_names[-1]
+                ack_text = f"Got your files '{joined_names}', and '{last_name}'."
+
+            ack_msg = Message(
+                conversation_id=conversation.id,
+                sender="bot",
+                text=ack_text
+            )
+            db.session.add(ack_msg)
+            db.session.commit()
+
+            emit('receive_message', {
+                'type': 'chat',
+                'role': 'assistant',
+                'content': ack_text,
+                'message_id': ack_msg.id,
+                'timestamp': ack_msg.timestamp.isoformat(),
+                'is_ack': True,
+                'user_message_id': user_msg.id,
+                'client_message_id': client_message_id
+            })
+
+        uploaded_files = []
+        upload_errors = []
+
+        if file_payloads:
+            uploaded_files, upload_errors = upload_images_to_cloudinary(file_payloads)
+
+            if uploaded_files:
+                # Persist attachment metadata for conversation history
+                for file_info in uploaded_files:
+                    attachment = MessageAttachment(
+                        message_id=user_msg.id,
+                        filename=file_info["name"],
+                        url=file_info["url"],
+                        content_type=file_info.get("type"),
+                        size_bytes=file_info.get("size")
+                    )
+                    db.session.add(attachment)
+                db.session.commit()
+
+                # In development mode, emit URL listing text message
+                # In production, skip the text message but still emit uploaded_files for frontend attachment status update
+                if not IS_PRODUCTION:
+                    url_lines = [f"{item['name']}: {item['url']}" for item in uploaded_files]
+                    uploads_text = "Uploaded image URLs:\n" + "\n".join(url_lines)
+
+                    upload_msg = Message(
+                        conversation_id=conversation.id,
+                        sender="bot",
+                        text=uploads_text
+                    )
+                    db.session.add(upload_msg)
+                    db.session.commit()
+
+                    emit('receive_message', {
+                        'type': 'chat',
+                        'role': 'assistant',
+                        'content': uploads_text,
+                        'message_id': upload_msg.id,
+                        'timestamp': upload_msg.timestamp.isoformat(),
+                        'is_ack': True,
+                        'uploaded_files': uploaded_files,
+                        'user_message_id': user_msg.id,
+                        'client_message_id': client_message_id
+                    })
+                else:
+                    # In production: emit uploaded_files without text message (frontend needs this to update attachment status)
+                    emit('receive_message', {
+                        'type': 'chat',
+                        'role': 'assistant',
+                        'content': '',  # Empty content - LLM will respond separately
+                        'message_id': None,
+                        'timestamp': datetime.utcnow().isoformat(),
+                        'is_ack': True,
+                        'uploaded_files': uploaded_files,
+                        'user_message_id': user_msg.id,
+                        'client_message_id': client_message_id
+                    })
+
+            if upload_errors:
+                error_text = "Some files could not be uploaded:\n" + "\n".join(upload_errors)
+                error_msg = Message(
+                    conversation_id=conversation.id,
+                    sender="bot",
+                    text=error_text
+                )
+                db.session.add(error_msg)
+                db.session.commit()
+
+                emit('receive_message', {
+                    'type': 'chat',
+                    'role': 'assistant',
+                    'content': error_text,
+                    'message_id': error_msg.id,
+                    'timestamp': error_msg.timestamp.isoformat(),
+                    'is_ack': True,
+                    'upload_errors': upload_errors,
+                    'user_message_id': user_msg.id,
+                    'client_message_id': client_message_id
+                })
         
+        user_message_for_context = user_message
+        # Store base64 data for vision API (pass along with uploaded_files)
+        image_base64_data = []
+        if uploaded_files:
+            attachment_notes = [
+                f"[Attachment: {item['name']} -> {item['url']}]"
+                for item in uploaded_files
+            ]
+            attachment_text = "\n".join(attachment_notes)
+            user_message_for_context = (
+                f"{user_message_for_context}\n{attachment_text}"
+                if user_message_for_context
+                else attachment_text
+            )
+            # Extract base64 data for vision API
+            for item in uploaded_files:
+                if item.get('base64') and item.get('type'):
+                    image_base64_data.append({
+                        "base64": item['base64'],
+                        "mime_type": item['type']
+                    })
+
     except Exception as e:
         logger.error(f"Database error saving message: {str(e)}", exc_info=True)
         db.session.rollback()
@@ -323,14 +639,31 @@ def handle_send_message(data):
         # 3. Process conversation context
         filtered_history, summarization_occurred = process_conversation_context(
             conversation,
-            user_message,
+            user_message_for_context,
             db.session
         )
         
         # 4. Gather full history
         history = Message.query.filter_by(conversation_id=conversation.id)\
             .order_by(Message.timestamp.asc()).all()
-        messages = [{"role": m.sender if m.sender != "bot" else "assistant", "content": m.text} for m in history]
+        messages = []
+        for msg in history:
+            content = msg.text or ""
+            attachments = getattr(msg, "attachments", []) or []
+            if attachments:
+                attachment_lines = []
+                for attachment in attachments:
+                    attachment_desc = attachment.filename or "file"
+                    if attachment.content_type:
+                        attachment_desc = f"{attachment_desc} ({attachment.content_type})"
+                    attachment_lines.append(f"[Attachment: {attachment_desc} -> {attachment.url}]")
+                attachment_text = "\n".join(attachment_lines)
+                content = f"{content}\n{attachment_text}" if content else attachment_text
+
+            messages.append({
+                "role": msg.sender if msg.sender != "bot" else "assistant",
+                "content": content
+            })
         
         # 5. Determine context info
         send_time, send_name, time_of_day = should_send_context_info(history)
@@ -344,6 +677,7 @@ def handle_send_message(data):
             conversation_history=filtered_history,
             time_of_day=time_of_day if send_time else None,
             chat_style=chat_style,
+            image_base64_data=image_base64_data if image_base64_data else None,
         )
         logger.info("AI response received")
 

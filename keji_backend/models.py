@@ -50,3 +50,20 @@ class Message(db.Model):
     message_group_id = db.Column(db.String(36), nullable=True)  # UUID to group chunks
     chunk_index = db.Column(db.Integer, nullable=True)  # Which chunk (0, 1, 2...)
     total_chunks = db.Column(db.Integer, nullable=True)  # Total chunks in group
+
+    attachments = db.relationship(
+        "MessageAttachment",
+        backref="message",
+        lazy="selectin",
+        cascade="all, delete-orphan"
+    )
+
+
+class MessageAttachment(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    message_id = db.Column(db.Integer, db.ForeignKey("message.id"), nullable=False, index=True)
+    filename = db.Column(db.String(255), nullable=False)
+    url = db.Column(db.String(1024), nullable=False)
+    content_type = db.Column(db.String(120), nullable=True)
+    size_bytes = db.Column(db.Integer, nullable=True)
+    created_at = db.Column(db.DateTime, default=datetime.now())

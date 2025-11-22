@@ -43,7 +43,7 @@ const Profile = () => {
 
   const settingsItems = [
     // { icon: "assets/All Icon Used/mdi_password.png", label: "Password", onClick: () => {} },
-    { icon: "assets/All Icon Used/mingcute_voice-fill.png", label: "Chat Style", onClick: () => setIsChatStyleModalOpen(true) },
+    { icon: "assets/All Icon Used/mingcute_voice-fill.png", label: "Switch Mood", onClick: () => setIsChatStyleModalOpen(true) },
     { icon: "assets/All Icon Used/mage_star-fill.png", label: "Favourites", onClick: () => {} },
   ];
 
@@ -128,8 +128,27 @@ const Profile = () => {
       
       <div className="max-w-md mx-auto space-y-4 px-5">
         {/* Profile Header */}
-        <div className="text-center">
-          <h1 className="text-2xl font-bold text-foreground mb-10">Profile</h1>
+        <div className="flex items-center justify-center mb-10 relative">
+          <Button
+            variant="ghost"
+            onClick={() => navigate("/homepage")}
+            className="absolute left-0 p-2"
+          >
+            <svg
+              xmlns="http://www.w3.org/2000/svg"
+              style={{ width: 24, height: 24 }}
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="black"
+              strokeWidth={2}
+              strokeLinecap="round"
+              strokeLinejoin="round"
+            >
+              <path d="M15 5 L7 12 L15 19" />
+              <line x1="7" y1="12" x2="21" y2="12" />
+            </svg>
+          </Button>
+          <h1 className="text-2xl font-bold text-foreground">Profile</h1>
         </div>
 
         {/* User Info Section */}
@@ -143,34 +162,31 @@ const Profile = () => {
           
           <div className="flex-1">
             {isEditingName ? (
-              <div className="flex flex-col sm:flex-row sm:items-center gap-3">
+              <div className="flex items-center gap-3">
                 <Input
                   value={nameInput}
                   onChange={(e) => setNameInput(e.target.value)}
                   placeholder="Enter your name"
                   disabled={isSavingName}
-                  className="h-12 rounded-2xl text-lg"
+                  className="bg-transparent border-0 border-b border-black rounded-none px-0 text-xl font-semibold focus-visible:ring-0 focus-visible:ring-offset-0"
                 />
-                <div className="flex items-center gap-2">
-                  <Button
-                    onClick={handleNameSave}
-                    disabled={isSavingName}
-                    className="px-4"
-                  >
-                    {isSavingName ? "Saving..." : "Save"}
-                  </Button>
-                  <Button
-                    variant="outline"
-                    onClick={() => {
-                      setIsEditingName(false);
-                      setNameInput(user?.name || "");
-                    }}
-                    disabled={isSavingName}
-                    className="px-4"
-                  >
-                    Cancel
-                  </Button>
-                </div>
+                <button
+                  onClick={() => {
+                    setIsEditingName(false);
+                    setNameInput(user?.name || "");
+                  }}
+                  disabled={isSavingName}
+                  className="bg-transparent text-black text-3xl hover:opacity-80 transition-opacity disabled:opacity-50"
+                >
+                  ×
+                </button>
+                <Button
+                  onClick={handleNameSave}
+                  disabled={isSavingName}
+                  className="px-3 text-lg"
+                >
+                  {isSavingName ? "Saving..." : "Save"}
+                </Button>
               </div>
             ) : (
               <h2 className="text-xl font-semibold text-foreground">

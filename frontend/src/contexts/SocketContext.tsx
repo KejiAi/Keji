@@ -11,6 +11,11 @@ interface SocketMessage {
   content: string;
   message_id: number;
   timestamp: string;
+  is_ack?: boolean;
+  uploaded_files?: Array<{ name: string; url: string; type?: string; size?: number }>;
+  upload_errors?: string[];
+  user_message_id?: number;
+  client_message_id?: string;
 }
 
 interface SocketRecommendation {
@@ -34,6 +39,7 @@ interface SocketChunk {
 }
 
 export interface SocketHistoryMessage {
+  message_id?: number;
   text: string;
   sender: string;
   timestamp: string;
@@ -41,6 +47,7 @@ export interface SocketHistoryMessage {
   message_group_id?: string;
   chunk_index?: number;
   total_chunks?: number;
+  attachments?: Array<{ name: string; url: string; type?: string; size?: number }>;
 }
 
 interface SocketHistory {
@@ -54,13 +61,21 @@ interface SocketError {
   details?: string;
 }
 
+interface SocketMessageSaved {
+  message_id: number;
+  timestamp: string;
+  client_message_id?: string;
+}
+
+export type OutgoingFile = { name: string; size?: number; type?: string; data?: string };
+
 interface SocketContextType {
   socket: Socket | null;
   isConnected: boolean;
   isReconnecting: boolean;
   connectionAttempts: number;
   hasSyncedHistory: boolean;
-  sendMessage: (message: string, files?: File[]) => void;
+  sendMessage: (message: string, files?: OutgoingFile[], clientMessageId?: string) => void;
   acceptRecommendation: (title: string, content: string) => void;
   requestHistory: () => void;
   onReceiveMessage: (callback: (data: SocketMessage) => void) => () => void;
@@ -68,6 +83,7 @@ interface SocketContextType {
   onReceiveRecommendation: (callback: (data: SocketRecommendation) => void) => () => void;
   onChatHistory: (callback: (data: SocketHistory) => void) => () => void;
   onError: (callback: (data: SocketError) => void) => () => void;
+  onMessageSaved: (callback: (data: SocketMessageSaved) => void) => () => void;
 }
 
 const SocketContext = createContext<SocketContextType | undefined>(undefined);
@@ -98,12 +114,14 @@ export const SocketProvider: React.FC<SocketProviderProps> = ({ children }) => {
     onReceiveRecommendation: Set<(data: SocketRecommendation) => void>;
     onChatHistory: Set<(data: SocketHistory) => void>;
     onError: Set<(data: SocketError) => void>;
+    onMessageSaved: Set<(data: SocketMessageSaved) => void>;
   }>({
     onReceiveMessage: new Set(),
     onReceiveChunk: new Set(),
     onReceiveRecommendation: new Set(),
     onChatHistory: new Set(),
     onError: new Set(),
+    onMessageSaved: new Set(),
   });
 
   useEffect(() => {
@@ -280,6 +298,13 @@ export const SocketProvider: React.FC<SocketProviderProps> = ({ children }) => {
 
     newSocket.on('message_saved', (data) => {
       console.log('✅ Message saved:', data);
+      eventHandlersRef.current.onMessageSaved.forEach(handler => {
+        try {
+          handler(data);
+        } catch (error) {
+          console.error('Error in message_saved handler:', error);
+        }
+      });
     });
 
     newSocket.on('recommendation_saved', (data) => {
@@ -298,7 +323,7 @@ export const SocketProvider: React.FC<SocketProviderProps> = ({ children }) => {
     };
   }, [isAuthenticated, sessionLoading]);
 
-  const sendMessage = useCallback((message: string, files?: File[]) => {
+  const sendMessage = useCallback((message: string, files?: OutgoingFile[], clientMessageId?: string) => {
     if (!socket || !isConnected) {
       console.error('❌ Cannot send message: Socket not connected');
       return;
@@ -308,6 +333,7 @@ export const SocketProvider: React.FC<SocketProviderProps> = ({ children }) => {
     socket.emit('send_message', {
       message,
       files: files || [],
+      client_message_id: clientMessageId,
     });
   }, [socket, isConnected]);
 
@@ -375,6 +401,13 @@ export const SocketProvider: React.FC<SocketProviderProps> = ({ children }) => {
     };
   }, []);
 
+  const onMessageSaved = useCallback((callback: (data: SocketMessageSaved) => void) => {
+    eventHandlersRef.current.onMessageSaved.add(callback);
+    return () => {
+      eventHandlersRef.current.onMessageSaved.delete(callback);
+    };
+  }, []);
+
   const value: SocketContextType = {
     socket,
     isConnected,
@@ -389,6 +422,7 @@ export const SocketProvider: React.FC<SocketProviderProps> = ({ children }) => {
     onReceiveRecommendation,
     onChatHistory,
     onError,
+    onMessageSaved,
   };
 
   return <SocketContext.Provider value={value}>{children}</SocketContext.Provider>;

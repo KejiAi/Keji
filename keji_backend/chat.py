@@ -137,7 +137,7 @@ def split_into_chunks(text, max_chunk_size=150):
     
     return chunks if chunks else [text]  # Return original text if no splits
 
-def call_llm(messages, user_name=None, conversation_history=None, time_of_day=None, chat_style=None):
+def call_llm(messages, user_name=None, conversation_history=None, time_of_day=None, chat_style=None, image_base64_data=None):
     """
     Call the real Keji AI implementation with conversation context.
     
@@ -146,6 +146,7 @@ def call_llm(messages, user_name=None, conversation_history=None, time_of_day=No
         user_name: Optional user's name for personalization
         conversation_history: Filtered conversation history for context (includes memory summary)
         time_of_day: Optional time period ('morning', 'afternoon', 'evening', 'night')
+        image_base64_data: Optional list of dicts with 'base64' and 'mime_type' for vision API
     
     Returns:
         dict: Structured response (chat or recommendation) from Keji AI
@@ -163,6 +164,8 @@ def call_llm(messages, user_name=None, conversation_history=None, time_of_day=No
             logger.debug(f"Time of day: {time_of_day}")
         if chat_style:
             logger.debug(f"Chat style: {chat_style}")
+        if image_base64_data:
+            logger.debug(f"Image base64 data: {len(image_base64_data)} image(s)")
 
         # Extract the latest user message
         if messages and len(messages) > 0:
@@ -183,6 +186,7 @@ def call_llm(messages, user_name=None, conversation_history=None, time_of_day=No
             conversation_history=conversation_history,
             time_of_day=time_of_day,
             chat_style=chat_style,
+            image_base64_data=image_base64_data,
         )
         
         # Validate response
@@ -239,6 +243,9 @@ def chat():
             return jsonify({"error": "Message too long (max 5000 characters)"}), 400
         
         files = request.files.getlist("files")
+        MAX_ATTACHMENTS = 2
+        if files and len(files) > MAX_ATTACHMENTS:
+            return jsonify({"error": f"You can upload at most {MAX_ATTACHMENTS} files per message."}), 400
         
         logger.info(f"HTTP chat request from {current_user.name}: {len(user_message)} chars (stream={stream_response})")
     except Exception as e:
@@ -282,7 +289,24 @@ def chat():
         # 4. Gather full history
         history = Message.query.filter_by(conversation_id=conversation.id)\
             .order_by(Message.timestamp.asc()).all()
-        messages = [{"role": m.sender if m.sender != "bot" else "assistant", "content": m.text} for m in history]
+        messages = []
+        for msg in history:
+            content = msg.text or ""
+            attachments = getattr(msg, "attachments", []) or []
+            if attachments:
+                attachment_lines = []
+                for attachment in attachments:
+                    attachment_desc = attachment.filename or "file"
+                    if attachment.content_type:
+                        attachment_desc = f"{attachment_desc} ({attachment.content_type})"
+                    attachment_lines.append(f"[Attachment: {attachment_desc} -> {attachment.url}]")
+                attachment_text = "\n".join(attachment_lines)
+                content = f"{content}\n{attachment_text}" if content else attachment_text
+
+            messages.append({
+                "role": msg.sender if msg.sender != "bot" else "assistant",
+                "content": content
+            })
         
         # 5. Determine context info
         send_time, send_name, time_of_day = should_send_context_info(history)

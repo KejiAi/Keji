@@ -3,6 +3,9 @@ from dotenv import load_dotenv
 from openai import OpenAI
 import json
 import logging
+import random
+import re
+from context_manager import MODEL_FOR_CHAT
 
 # Configure logging
 logging.basicConfig(
@@ -16,6 +19,33 @@ food_data_path = os.path.join(os.path.dirname(__file__), 'foods.json')
 keji_prompt_path = os.path.join(os.path.dirname(__file__), 'keji_prompt.txt')
 
 logger.info("Keji AI Response Module initialized")
+
+ENVIRONMENT = os.getenv("FLASK_ENV", "development").strip().lower()
+IS_PRODUCTION = ENVIRONMENT == "production"
+
+logger.info(f"Environment: {ENVIRONMENT} (production={IS_PRODUCTION})")
+
+DUMMY_RESPONSES = [
+    "Dev mode reply: I hear you loud and clear.",
+    "Keji (sandbox) says hi!",
+    "Just echoing back from dev mode.",
+    "Testing response flowing fine.",
+    "Still in dev mode, but I'm paying attention.",
+    "Sandbox Keji is chilling. What's next?",
+]
+
+
+def _build_dummy_response(user_input):
+    """
+    Construct a lightweight dummy response for non-production environments.
+    """
+    snippet = user_input.strip() if user_input else ""
+    if snippet and len(snippet) > 60:
+        snippet = snippet[:57].rstrip() + "..."
+    base = random.choice(DUMMY_RESPONSES)
+    if snippet:
+        return f"{base} (You said: {snippet})"
+    return base
 
 def _openai_in_thread(func):
     """Wrapper to run OpenAI calls in real threads (bypasses eventlet SSL)"""
@@ -37,6 +67,11 @@ def classify_llm(prompt, conversation_history=None):
     Returns:
         str: JSON classification result
     """
+    if not IS_PRODUCTION:
+        logger.debug("Non-production environment: skipping OpenAI classify call")
+        # Return a simple chat classification so flow continues
+        return json.dumps({"chat": "dev_mode"})
+
     logger.debug("Classifying user intent...")
     
     # Build messages array with conversation history
@@ -59,15 +94,28 @@ def classify_llm(prompt, conversation_history=None):
     logger.debug(f"Classification context: {len(messages)} messages")
     
     def _call():
-        """Run in real thread with fresh OpenAI client"""
-        client = _get_openai_client()
-        return client.chat.completions.create(
-            model="gpt-4o-mini",
-            messages=messages
-        )
+        """Run in real thread with fresh OpenAI client - extract data before returning"""
+        try:
+            client = _get_openai_client()
+            response = client.chat.completions.create(
+                model="gpt-4o-mini",
+                messages=messages
+            )
+            # Extract content before returning (avoids greenlet issues)
+            if response and hasattr(response, 'choices') and response.choices:
+                content = response.choices[0].message.content
+                return {"success": True, "content": content if content else ""}
+            return {"error": "Invalid response from OpenAI API"}
+        except Exception as e:
+            logger.error(f"Error in classification API call: {str(e)}", exc_info=True)
+            return {"error": str(e)}
     
-    response = _openai_in_thread(_call)
-    result = response.choices[0].message.content
+    response_data = _openai_in_thread(_call)
+    if not response_data or not isinstance(response_data, dict) or "error" in response_data:
+        logger.error(f"Classification failed: {response_data.get('error', 'Unknown error') if isinstance(response_data, dict) else 'Invalid response'}")
+        return json.dumps({"chat": "error"})
+    
+    result = response_data.get("content", "")
     logger.debug(f"Classification complete: {len(result)} chars")
     logger.debug("\n")
     
@@ -82,6 +130,7 @@ def call_llm(
     conversation_history=None,
     time_of_day=None,
     chat_style=None,
+    image_base64_data=None,
 ):
     """
     Call the LLM with Keji's personality and return structured response.
@@ -94,10 +143,19 @@ def call_llm(
         conversation_history: Optional list of previous messages (includes memory summary if available)
         time_of_day: Optional time period ('morning', 'afternoon', 'evening', 'night')
         chat_style: Optional user chat style preference
+        image_base64_data: Optional list of dicts with 'base64' and 'mime_type' for vision API
     
     Returns:
         dict: Structured response with 'type', 'role', 'content', and optionally 'title' and 'health'
     """
+    if not IS_PRODUCTION:
+        logger.info("Non-production environment: returning dummy LLM response")
+        return {
+            "type": "chat",
+            "role": "assistant",
+            "content": _build_dummy_response(prompt)
+        }
+
     logger.info("Calling Keji AI...")
     
     if keji_prompt_path is None:
@@ -152,52 +210,176 @@ def call_llm(
                 # Add the summary as a system message AFTER the main system prompt
                 messages.append(hist_msg)
     
-    # Add the current user message
-    messages.append({"role": "user", "content": user_message})
+    # Use base64 data for vision API if provided, otherwise try to extract URLs from message
+    has_images = False
+    if image_base64_data and len(image_base64_data) > 0:
+        # Use base64 data directly (preferred method)
+        has_images = True
+        logger.info(f"🖼️ Using {len(image_base64_data)} image(s) with base64 data for vision API")
+        
+        # Remove attachment markers from text, keep only the actual user message
+        user_message = re.sub(r'\[Attachment:[^\]]*\]', '', user_message).strip()
+        user_message = re.sub(r'^Uploaded image URLs:.*$', '', user_message, flags=re.MULTILINE).strip()
+        
+        # Build content array with text and base64 images
+        user_content = [{"type": "text", "text": user_message}]
+        for img_data in image_base64_data:
+            base64_str = img_data.get("base64", "")
+            mime_type = img_data.get("mime_type", "image/jpeg")
+            # Format as data URI: data:image/<format>;base64,<BASE64_DATA>
+            data_uri = f"data:{mime_type};base64,{base64_str}"
+            user_content.append({
+                "type": "image_url",
+                "image_url": {"url": data_uri}
+            })
+        messages.append({"role": "user", "content": user_content})
+        logger.debug(f"   User text: {user_message[:100]}...")
+        logger.debug(f"   Image formats: {[img.get('mime_type') for img in image_base64_data]}")
+    else:
+        # Fallback: Try to extract image URLs from message text
+        attachment_pattern = r'\[Attachment:[^\]]*->\s*(https?://[^\s\]]+)\]'
+        matches = re.findall(attachment_pattern, user_message)
+        
+        if matches:
+            has_images = True
+            image_urls = matches
+            logger.info(f"🖼️ Detected {len(image_urls)} image URL(s) in user message (fallback method)")
+            logger.debug(f"Image URLs: {image_urls}")
+            # Remove attachment markers from text
+            user_message = re.sub(r'\[Attachment:[^\]]*\]', '', user_message).strip()
+            user_message = re.sub(r'^Uploaded image URLs:.*$', '', user_message, flags=re.MULTILINE).strip()
+            
+            # Build content array with text and image URLs
+            user_content = [{"type": "text", "text": user_message}]
+            for img_url in image_urls:
+                user_content.append({
+                    "type": "image_url",
+                    "image_url": {"url": img_url}
+                })
+            messages.append({"role": "user", "content": user_content})
+            logger.debug(f"   User text: {user_message[:100]}...")
+        else:
+            # Regular text message (no images)
+            messages.append({"role": "user", "content": user_message})
     
     logger.debug(f"Total context messages: {len(messages)}")
 
     def _call():
-        """Run in real thread with fresh OpenAI client"""
-        client = _get_openai_client()
-        return client.chat.completions.create(
-            model="gpt-5",
-            messages=messages
-        )
+        """Run in real thread with fresh OpenAI client - extract all data before returning"""
+        try:
+            client = _get_openai_client()
+            # Use gpt-4o for main chat (upgraded version, supports both text and vision)
+            # gpt-4o-mini is used for summarization and classification (smaller tasks)
+            model = MODEL_FOR_CHAT  # gpt-4o - upgraded version for main chat
+            logger.info(f"📤 Calling OpenAI API with model: {model}, {len(messages)} messages")
+            if has_images:
+                logger.info(f"   Vision request with images")
+            
+            response = client.chat.completions.create(
+                model=model,
+                messages=messages
+            )
+            
+            # Extract all needed data from response BEFORE returning (avoids greenlet issues)
+            if not response or not hasattr(response, 'choices') or not response.choices:
+                return {"error": "Invalid response from OpenAI API"}
+            
+            message = response.choices[0].message
+            if not hasattr(message, 'content'):
+                return {"error": "Message missing content attribute"}
+            
+            content = message.content
+            if content is None:
+                return {"error": "Response content is None"}
+            
+            # Return simple dict with extracted data (no complex objects)
+            return {
+                "success": True,
+                "content": content.strip() if content else ""
+            }
+        except Exception as e:
+            logger.error(f"Error in OpenAI API call: {str(e)}", exc_info=True)
+            return {"error": str(e)}
     
-    response = _openai_in_thread(_call)
-    result = response.choices[0].message.content.strip()
-    logger.debug(f"LLM response: {len(result)} chars")
-    logger.debug("\n")
-    
-    # Parse JSON response
     try:
-        parsed = json.loads(result)
-        logger.info("Successfully parsed JSON response")
-        logger.info(f"   Response type: {parsed.get('type', 'unknown')}")
+        response_data = _openai_in_thread(_call)
         
-        # Validate structure
-        if "type" in parsed and "role" in parsed and "content" in parsed:
-            if parsed.get('type') == 'recommendation':
-                logger.info(f"Recommendation: {parsed.get('title', 'N/A')}")
-            return parsed
-        else:
-            logger.warning("Incomplete JSON structure, using fallback")
-            # Fallback if structure is incomplete
+        # Check if response is valid
+        if not response_data or not isinstance(response_data, dict):
+            logger.error("❌ No response data from OpenAI API")
+            return {
+                "type": "chat",
+                "role": "assistant",
+                "content": "Omo, something don happen for my side. Abeg try again?"
+            }
+        
+        if "error" in response_data:
+            logger.error(f"❌ Error in OpenAI API call: {response_data['error']}")
+            return {
+                "type": "chat",
+                "role": "assistant",
+                "content": "Omo, something don happen for my side. Abeg try again?"
+            }
+        
+        if not response_data.get("success"):
+            logger.error("❌ OpenAI API call was not successful")
+            return {
+                "type": "chat",
+                "role": "assistant",
+                "content": "Omo, something don happen for my side. Abeg try again?"
+            }
+        
+        result = response_data.get("content", "")
+        if not result or not result.strip():
+            logger.error(f"❌ Empty response content")
+            return {
+                "type": "chat",
+                "role": "assistant",
+                "content": "Omo, something don happen for my side. Abeg try again?"
+            }
+        
+        result = result.strip()
+        logger.info(f"✅ LLM response received: {len(result)} chars")
+        if has_images:
+            logger.info(f"🖼️ Vision API response preview: {result[:200]}...")
+        logger.debug("\n")
+        
+        # Parse JSON response
+        try:
+            parsed = json.loads(result)
+            logger.info("Successfully parsed JSON response")
+            logger.info(f"   Response type: {parsed.get('type', 'unknown')}")
+            
+            # Validate structure
+            if "type" in parsed and "role" in parsed and "content" in parsed:
+                if parsed.get('type') == 'recommendation':
+                    logger.info(f"Recommendation: {parsed.get('title', 'N/A')}")
+                return parsed
+            else:
+                logger.warning("Incomplete JSON structure, using fallback")
+                # Fallback if structure is incomplete
+                return {
+                    "type": "chat",
+                    "role": "assistant",
+                    "content": result
+                }
+        except json.JSONDecodeError as e:
+            logger.error(f"JSON parsing failed: {str(e)}")
+            logger.error(f"   Raw response (first 500 chars): {result[:500]}")
+            logger.error("   Using fallback chat response")
+            logger.info("="*60 + "\n")
+            # If LLM didn't return valid JSON, wrap it as chat
             return {
                 "type": "chat",
                 "role": "assistant",
                 "content": result
             }
-    except json.JSONDecodeError as e:
-        logger.error(f"JSON parsing failed: {str(e)}")
-        logger.error("   Using fallback chat response")
-        logger.info("="*60 + "\n")
-        # If LLM didn't return valid JSON, wrap it as chat
+    except Exception as e:
+        logger.error(f"Error calling OpenAI API: {str(e)}", exc_info=True)
         return {
             "type": "chat",
             "role": "assistant",
-            "content": result
+            "content": "Omo, something don happen for my side. Abeg try again?"
         }
 
 
@@ -212,6 +394,11 @@ def classify_intent(user_input, conversation_history=None):
     Returns:
         dict: Classification result with intent type
     """
+    if not IS_PRODUCTION:
+        logger.info("Non-production environment: using dummy classifier (CHAT intent)")
+        logger.info("="*60 + "\n")
+        return {"chat": user_input}
+
     logger.info("Classifying intent...")
     logger.debug(f"Input: {len(user_input)} chars")
     
@@ -320,7 +507,7 @@ def get_meals_by_ingredients(ingredients):
         return []
 
 
-def handle_user_input(user_input, user_name=None, conversation_history=None, time_of_day=None, chat_style=None):
+def handle_user_input(user_input, user_name=None, conversation_history=None, time_of_day=None, chat_style=None, image_base64_data=None):
     """
     Handle user input, classify intent, and return appropriate structured response.
     
@@ -329,11 +516,22 @@ def handle_user_input(user_input, user_name=None, conversation_history=None, tim
         user_name: Optional user's name for personalization
         conversation_history: Optional list of previous messages for context
         time_of_day: Optional time period for time-based greetings
+        image_base64_data: Optional list of dicts with 'base64' and 'mime_type' for vision API
     
     Returns:
         dict: Structured response (chat or recommendation)
     """
+    if not IS_PRODUCTION:
+        logger.info("Processing input in non-production mode (dummy response)")
+        return {
+            "type": "chat",
+            "role": "assistant",
+            "content": _build_dummy_response(user_input)
+        }
+
     logger.info(f"Processing input: {len(user_input)} chars")
+    if image_base64_data:
+        logger.info(f"   With {len(image_base64_data)} image(s) for vision API")
     
     intent = classify_intent(user_input, conversation_history=conversation_history)
 
@@ -358,6 +556,7 @@ def handle_user_input(user_input, user_name=None, conversation_history=None, tim
             conversation_history=conversation_history,
             time_of_day=time_of_day,
             chat_style=chat_style,
+            image_base64_data=image_base64_data,
         )
         logger.info("Decision confirmation generated")
         return result
@@ -480,6 +679,7 @@ def handle_user_input(user_input, user_name=None, conversation_history=None, tim
             conversation_history=conversation_history,
             time_of_day=time_of_day,
             chat_style=chat_style,
+            image_base64_data=image_base64_data,
         )
         logger.info("Chat response generated")
         return result

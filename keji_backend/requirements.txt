@@ -17,3 +17,5 @@ tiktoken
 resend
 authlib
 requests
+cloudinary
+certifi

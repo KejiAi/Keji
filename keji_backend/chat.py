@@ -334,12 +334,21 @@ def chat():
 
     try:
         # 7. Handle response
+        # IMPORTANT: Recommendations must NEVER be chunked - they must be sent as complete JSON structure
         if isinstance(bot_reply, dict) and bot_reply.get("type") == "recommendation":
-            # Don't save to DB yet
-            logger.info(f"Recommendation: {bot_reply.get('title', 'N/A')}")
-            
-            # For recommendations, always return immediately (no streaming)
-            return jsonify(bot_reply), 200
+            # Validate recommendation structure before returning
+            if "title" in bot_reply and "content" in bot_reply:
+                # Don't save to DB yet
+                # NEVER chunk recommendations - return complete structure immediately
+                logger.info(f"Recommendation: {bot_reply.get('title', 'N/A')} (length: {len(str(bot_reply))} chars - NOT chunking)")
+                
+                # For recommendations, always return immediately (no streaming, no chunking)
+                return jsonify(bot_reply), 200
+            else:
+                logger.error(f"Invalid recommendation structure: missing title or content. Got: {list(bot_reply.keys())}")
+                # Fallback to chat response
+                reply_text = bot_reply.get("content", "Here's a food suggestion for you.")
+                return jsonify({"type": "chat", "role": "assistant", "content": reply_text}), 200
         else:
             # Normal chat response
             reply_text = bot_reply.get("content") if isinstance(bot_reply, dict) else str(bot_reply)

@@ -299,6 +299,36 @@ const Chat = () => {
     const cleanupChunk = onReceiveChunk((data) => {
       console.log('📦 Received chunk:', data.chunk_index + 1, '/', data.total_chunks);
       
+      // SAFETY CHECK: If first chunk looks like a recommendation JSON, try to parse it
+      if (data.chunk_index === 0) {
+        try {
+          // Check if chunk contains recommendation structure
+          const chunkText = data.chunk.trim();
+          if (chunkText.startsWith('{') && (chunkText.includes('"type":"recommendation"') || chunkText.includes("'type': 'recommendation'"))) {
+            // Try to parse as complete recommendation JSON
+            const parsed = JSON.parse(chunkText);
+            if (parsed.type === 'recommendation' && parsed.title && parsed.content) {
+              console.warn('⚠️ Recommendation received as chunk - this should not happen! Parsing as recommendation.');
+              setRecommendation({
+                title: parsed.title,
+                content: parsed.content,
+                health: parsed.health
+              });
+              setLoading(false);
+              if (loadingTimerRef.current) {
+                clearTimeout(loadingTimerRef.current);
+                loadingTimerRef.current = null;
+              }
+              setLoadingMessage("Keji is thinking");
+              return; // Don't process as chunk
+            }
+          }
+        } catch (e) {
+          // Not a complete JSON, continue with normal chunk processing
+          console.debug('Chunk is not a recommendation JSON, processing normally');
+        }
+      }
+      
       // First chunk - change from "thinking" to "typing" and add as first bubble
       if (data.chunk_index === 0) {
         setLoading(false);
@@ -956,8 +986,8 @@ const Chat = () => {
             </header>
 
             {/* Chat body (scrollable) - separate div with bottom border */}
-            <div className="flex-1 overflow-y-auto overflow-x-hidden bg-background border-b-2 border-budget-red/50 rounded-b-[28px]">
-              <div className="max-w-2xl mx-auto space-y-4 px-2 sm:px-0">
+            <div className="flex-1 relative overflow-y-auto overflow-x-hidden bg-background border-b-2 border-budget-red/50 rounded-b-[28px]">
+              <div className="max-w-2xl mx-auto space-y-4 px-2 sm:px-0 pb-8">
               {messages.map((message) => {
             const isUser = message.sender === "user";
             return (
@@ -1189,7 +1219,7 @@ const Chat = () => {
         <div className="h-3 flex-shrink-0 bg-background"></div>
 
         {/* Input section - separate div that sits below chat interface */}
-        <div className="bg-white flex-shrink-0" style={{ borderTopLeftRadius: '40px', borderTopRightRadius: '40px' }}>
+        <div className="bg-[#FFFBFB] flex-shrink-0" style={{ borderTopLeftRadius: '40px', borderTopRightRadius: '40px' }}>
           <div className="w-full">
             {/* File preview - displayed above */}
             {selectedFiles.length > 0 && (

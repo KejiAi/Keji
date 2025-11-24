@@ -696,75 +696,108 @@ def handle_send_message(data):
     # Save and send response
     try:
         # 7. Handle response
+        # IMPORTANT: Recommendations must NEVER be chunked - they must be sent as complete JSON structure
+        # Check if bot_reply is a dict first
+        if not isinstance(bot_reply, dict):
+            logger.warning(f"bot_reply is not a dict, got type: {type(bot_reply)}")
+            # Try to parse if it's a string
+            if isinstance(bot_reply, str):
+                try:
+                    bot_reply = json.loads(bot_reply)
+                except:
+                    logger.error("Failed to parse bot_reply as JSON")
+                    bot_reply = {"type": "chat", "role": "assistant", "content": str(bot_reply)}
+        
+        # Check for recommendation type - MUST be checked before any chunking logic
         if isinstance(bot_reply, dict) and bot_reply.get("type") == "recommendation":
-            # Don't save to DB yet, wait for user acceptance
-            logger.info(f"Recommendation: {bot_reply.get('title', 'N/A')}")
-            emit('receive_recommendation', bot_reply)
+            # Validate recommendation structure before emitting
+            if "title" in bot_reply and "content" in bot_reply:
+                # Don't save to DB yet, wait for user acceptance
+                # NEVER chunk recommendations - send complete structure immediately
+                logger.info(f"✅ Recommendation detected: {bot_reply.get('title', 'N/A')} (length: {len(str(bot_reply))} chars - NOT chunking)")
+                logger.info(f"   Recommendation structure: type={bot_reply.get('type')}, has_title={bool(bot_reply.get('title'))}, has_content={bool(bot_reply.get('content'))}")
+                emit('receive_recommendation', bot_reply)
+                logger.info("   Recommendation emitted successfully - exiting early")
+                return  # Exit early - don't process as chat message
+            else:
+                logger.error(f"❌ Invalid recommendation structure: missing title or content. Got keys: {list(bot_reply.keys())}")
+                # Fallback to chat response
+                reply_text = bot_reply.get("content", "Here's a food suggestion for you.")
+                # Continue with normal chat flow
+                bot_reply = {"type": "chat", "role": "assistant", "content": reply_text}
+        
+        # Double-check: If somehow we still have a recommendation here, log error and send it properly
+        if isinstance(bot_reply, dict) and bot_reply.get("type") == "recommendation":
+            logger.error("🚨 CRITICAL: Recommendation reached chunking section - this should NEVER happen!")
+            logger.error(f"   Recommendation: {bot_reply.get('title', 'N/A')}")
+            if "title" in bot_reply and "content" in bot_reply:
+                emit('receive_recommendation', bot_reply)
+                return
+            
+        # Normal chat: save and send (with chunking for long messages)
+        # NOTE: Recommendations are handled above and return early, so this code only runs for chat messages
+        reply_text = bot_reply.get("content") if isinstance(bot_reply, dict) else str(bot_reply)
+        
+        if not reply_text:
+            logger.warning("Empty reply from AI, using fallback")
+            reply_text = "Yeah, how can I help you?"
+        
+        # Decide if we should chunk this message (ONLY for chat messages - recommendations never reach here)
+        should_chunk = len(reply_text) > 100
+        
+        if should_chunk:
+            # Split into chunks and save each chunk
+            chunks = split_into_chunks(reply_text, max_chunk_size=150)
+            message_group_id = str(uuid.uuid4())
+            logger.info(f"Chunking message: {len(chunks)} chunks, group ID: {message_group_id}")
+            
+            # Save all chunks to database
+            chunk_messages = []
+            for i, chunk in enumerate(chunks):
+                chunk_msg = Message(
+                    conversation_id=conversation.id,
+                    sender="bot",
+                    text=chunk,
+                    message_group_id=message_group_id,
+                    chunk_index=i,
+                    total_chunks=len(chunks)
+                )
+                db.session.add(chunk_msg)
+                chunk_messages.append(chunk_msg)
+            
+            db.session.commit()
+            logger.info(f"All {len(chunks)} chunks saved to database")
+            
+            # Send chunks to client with delays based on text length
+            for i, (chunk, chunk_msg) in enumerate(zip(chunks, chunk_messages)):
+                # Calculate delay based on chunk length (simulate realistic typing)
+                if i > 0:
+                    # Base delay (thinking/pause between sentences) + typing time
+                    base_delay = 0.8
+                    typing_speed = 40  # characters per second (realistic fast typing)
+                    typing_time = len(chunk) / typing_speed
+                    delay = base_delay + typing_time
+                    
+                    logger.debug(f"Chunk {i+1}/{len(chunks)}: {len(chunk)} chars, waiting {delay:.2f}s")
+                    time.sleep(delay)
+                
+                chunk_data = {
+                    'type': 'chat_chunk',
+                    'role': 'assistant',
+                    'chunk': chunk,
+                    'chunk_index': i,
+                    'total_chunks': len(chunks),
+                    'is_final': i == len(chunks) - 1,
+                    'message_group_id': message_group_id,
+                    'message_id': chunk_msg.id,
+                    'timestamp': chunk_msg.timestamp.isoformat()
+                }
+                emit('receive_chunk', chunk_data)
+                logger.debug(f"Chunk {i+1}/{len(chunks)} sent")
+            
+            logger.info(f"All {len(chunks)} chunks sent to client")
             
         else:
-            # Normal chat: save and send (with chunking for long messages)
-            reply_text = bot_reply.get("content") if isinstance(bot_reply, dict) else str(bot_reply)
-            
-            if not reply_text:
-                logger.warning("Empty reply from AI, using fallback")
-                reply_text = "Yeah, how can I help you?"
-            
-            # Decide if we should chunk this message
-            should_chunk = len(reply_text) > 100
-            
-            if should_chunk:
-                # Split into chunks and save each chunk
-                chunks = split_into_chunks(reply_text, max_chunk_size=150)
-                message_group_id = str(uuid.uuid4())
-                logger.info(f"Chunking message: {len(chunks)} chunks, group ID: {message_group_id}")
-                
-                # Save all chunks to database
-                chunk_messages = []
-                for i, chunk in enumerate(chunks):
-                    chunk_msg = Message(
-                        conversation_id=conversation.id,
-                        sender="bot",
-                        text=chunk,
-                        message_group_id=message_group_id,
-                        chunk_index=i,
-                        total_chunks=len(chunks)
-                    )
-                    db.session.add(chunk_msg)
-                    chunk_messages.append(chunk_msg)
-                
-                db.session.commit()
-                logger.info(f"All {len(chunks)} chunks saved to database")
-                
-                # Send chunks to client with delays based on text length
-                for i, (chunk, chunk_msg) in enumerate(zip(chunks, chunk_messages)):
-                    # Calculate delay based on chunk length (simulate realistic typing)
-                    if i > 0:
-                        # Base delay (thinking/pause between sentences) + typing time
-                        base_delay = 0.8
-                        typing_speed = 40  # characters per second (realistic fast typing)
-                        typing_time = len(chunk) / typing_speed
-                        delay = base_delay + typing_time
-                        
-                        logger.debug(f"Chunk {i+1}/{len(chunks)}: {len(chunk)} chars, waiting {delay:.2f}s")
-                        time.sleep(delay)
-                    
-                    chunk_data = {
-                        'type': 'chat_chunk',
-                        'role': 'assistant',
-                        'chunk': chunk,
-                        'chunk_index': i,
-                        'total_chunks': len(chunks),
-                        'is_final': i == len(chunks) - 1,
-                        'message_group_id': message_group_id,
-                        'message_id': chunk_msg.id,
-                        'timestamp': chunk_msg.timestamp.isoformat()
-                    }
-                    emit('receive_chunk', chunk_data)
-                    logger.debug(f"Chunk {i+1}/{len(chunks)} sent")
-                
-                logger.info(f"All {len(chunks)} chunks sent to client")
-                
-            else:
                 # Short message - save as single message and send immediately
                 bot_msg = Message(
                     conversation_id=conversation.id,

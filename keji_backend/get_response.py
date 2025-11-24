@@ -344,25 +344,53 @@ def call_llm(
             logger.info(f"🖼️ Vision API response preview: {result[:200]}...")
         logger.debug("\n")
         
+        # Strip markdown code blocks if present (OpenAI sometimes wraps JSON in ```json ... ```)
+        if result.startswith('```'):
+            # Find the closing ```
+            lines = result.split('\n')
+            # Remove first line if it's ```json or ```
+            if lines[0].startswith('```'):
+                lines = lines[1:]
+            # Remove last line if it's ```
+            if lines and lines[-1].strip() == '```':
+                lines = lines[:-1]
+            result = '\n'.join(lines).strip()
+            logger.debug("Stripped markdown code blocks from response")
+        
         # Parse JSON response
         try:
             parsed = json.loads(result)
             logger.info("Successfully parsed JSON response")
             logger.info(f"   Response type: {parsed.get('type', 'unknown')}")
             
-            # Validate structure
-            if "type" in parsed and "role" in parsed and "content" in parsed:
-                if parsed.get('type') == 'recommendation':
+            # Validate structure based on type
+            response_type = parsed.get('type', 'unknown')
+            
+            if response_type == 'recommendation':
+                # Validate recommendation structure
+                if "type" in parsed and "role" in parsed and "title" in parsed and "content" in parsed:
                     logger.info(f"Recommendation: {parsed.get('title', 'N/A')}")
-                return parsed
+                    return parsed
+                else:
+                    logger.warning("Incomplete recommendation structure, using fallback")
+                    logger.warning(f"   Missing fields - type: {'type' in parsed}, role: {'role' in parsed}, title: {'title' in parsed}, content: {'content' in parsed}")
+                    return {
+                        "type": "chat",
+                        "role": "assistant",
+                        "content": result
+                    }
             else:
-                logger.warning("Incomplete JSON structure, using fallback")
-                # Fallback if structure is incomplete
-                return {
-                    "type": "chat",
-                    "role": "assistant",
-                    "content": result
-                }
+                # Validate chat structure
+                if "type" in parsed and "role" in parsed and "content" in parsed:
+                    return parsed
+                else:
+                    logger.warning("Incomplete JSON structure, using fallback")
+                    # Fallback if structure is incomplete
+                    return {
+                        "type": "chat",
+                        "role": "assistant",
+                        "content": result
+                    }
         except json.JSONDecodeError as e:
             logger.error(f"JSON parsing failed: {str(e)}")
             logger.error(f"   Raw response (first 500 chars): {result[:500]}")
@@ -511,6 +539,9 @@ def handle_user_input(user_input, user_name=None, conversation_history=None, tim
     """
     Handle user input, classify intent, and return appropriate structured response.
     
+    NOTE: Classification and recommendation features only work when FLASK_ENV=production.
+    In development/testing mode, returns dummy chat responses.
+    
     Args:
         user_input: The user's message
         user_name: Optional user's name for personalization
@@ -523,6 +554,7 @@ def handle_user_input(user_input, user_name=None, conversation_history=None, tim
     """
     if not IS_PRODUCTION:
         logger.info("Processing input in non-production mode (dummy response)")
+        logger.info("   Classification and recommendations disabled - set FLASK_ENV=production to enable")
         return {
             "type": "chat",
             "role": "assistant",

@@ -9,7 +9,7 @@ All colors MUST be HSL.
 @layer base {
 :root {
     /* Warm light background and confident accent */
-    --background: 12 70% 97%;
+    --background: 0 57% 97%;
     --foreground: 215 25% 12%;
     --background-light: 12 33% 99%;
     --background-dark: 12 90% 90%;

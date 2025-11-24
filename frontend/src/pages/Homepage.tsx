@@ -262,7 +262,7 @@ const Homepage = () => {
         <div className="grid grid-cols-2 gap-3 md:gap-4 md:mb-2">
           <Button
             onClick={() => setBudgetModalOpen(true)}
-            className="h-52 md:h-60 rounded-3xl bg-budget-red hover:bg-budget-red/70
+            className="h-52 md:h-60 rounded-3xl bg-budget-red
                        text-budget-red-foreground  pt-6 pb-6 flex flex-col
                        justify-between text-left relative overflow-hidden group"
             size="lg"
@@ -290,7 +290,7 @@ const Homepage = () => {
 
           <Button
             onClick={() => setIngredientModalOpen(true)}
-            className="h-52 md:h-60 rounded-3xl bg-brand-deep hover:bg-brand-deep/70
+            className="h-52 md:h-60 rounded-3xl bg-brand-deep hover:bg-brand-deep
                        text-budget-red-foreground pl-4 pt-6 pb-6 flex flex-col items-start
                        justify-between text-left relative overflow-hidden group"
             size="lg"
@@ -321,7 +321,7 @@ const Homepage = () => {
         <MealOptions className="pt-2" />
 
         {/* Chat input area */}
-        <div className="fixed bottom-0 left-0 right-0 bg-white" style={{ borderTopLeftRadius: '40px', borderTopRightRadius: '40px' }}>
+        <div className="fixed bottom-0 left-0 right-0 bg-[#FFFBFB]" style={{ borderTopLeftRadius: '40px', borderTopRightRadius: '40px' }}>
           <div className="w-full">
             {/* File preview - displayed above */}
             {selectedFiles.length > 0 && (

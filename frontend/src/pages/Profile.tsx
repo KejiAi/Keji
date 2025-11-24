@@ -228,11 +228,11 @@ const Profile = () => {
                 <Button
                   key={item.label}
                   variant="ghost"
-                  className="w-full justify-start text-left p-4 h-14 rounded-md bg-background shadow-sm border"
+                  className="w-full justify-start text-left p-3 h-14 rounded-md bg-background shadow-sm border"
                   onClick={item.onClick}
                 >
-                  <img src={item.icon} alt={item.label} className="h-7 w-7 mr-3 object-contain" />
-                  <span className="text-2xl font-normal">{item.label}</span>
+                  <img src={item.icon} alt={item.label} className="h-5 w-5 mr-1 object-contain" />
+                  <span className="text-xl font-semibold">{item.label}</span>
                 </Button>
               ))}
             </div>
@@ -247,11 +247,11 @@ const Profile = () => {
                 <Button
                   key={item.label}
                   variant="ghost"
-                  className="w-full justify-start text-left p-4 h-auto rounded-md bg-background shadow-sm border"
+                  className="w-full justify-start text-left p-3 h-auto rounded-md bg-background shadow-sm border"
                   onClick={item.onClick}
                 >
-                  <img src={item.icon} alt={item.label} className="h-7 w-7 mr-3 object-contain" />
-                  <span className="text-2xl font-normal">{item.label}</span>
+                  <img src={item.icon} alt={item.label} className="h-5 w-5 mr-1 object-contain" />
+                  <span className="text-xl font-semibold">{item.label}</span>
                 </Button>
               ))}
             </div>

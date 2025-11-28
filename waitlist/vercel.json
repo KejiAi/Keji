@@ -1,0 +1,14 @@
+{
+  "functions": {
+    "api/submit.ts": {
+      "runtime": "nodejs20.x"
+    }
+  },
+  "rewrites": [
+    {
+      "source": "/api/submit",
+      "destination": "/api/submit"
+    }
+  ]
+}
+

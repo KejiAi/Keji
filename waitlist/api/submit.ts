@@ -23,17 +23,6 @@ export default async function handler(
 
     const sql = neon(databaseUrl);
 
-    // Create table if it doesn't exist
-    await sql`
-      CREATE TABLE IF NOT EXISTS waitlist (
-        id SERIAL PRIMARY KEY,
-        name VARCHAR(100) NOT NULL,
-        email VARCHAR(100) UNIQUE NOT NULL,
-        phone VARCHAR(20) NOT NULL,
-        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-      )
-    `;
-
     // Insert the new entry
     await sql`
       INSERT INTO waitlist (name, email, phone)

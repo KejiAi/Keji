@@ -208,7 +208,7 @@ function Modal({
 
               {/* Nigeria Flag */}
               <img
-                src="/assets/all_icons_used/emojione_flag-for-nigeria.png"
+                src="/assets/all_icons_used/emojione_flag-for-nigeria.svg"
                 alt="NG"
                 className="w-4 h-4"
               />

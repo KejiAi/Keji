@@ -69,7 +69,7 @@ function App() {
       <div id="first-section" className="bg-primary w-full h-full p-8 relative overflow-y-auto">
         {/* header */}
         <div className="flex justify-between items-center">
-          <img className="w-auto h-7" src="/assets/all_icons_used/logo.png" alt="Keji" />
+          <img className="w-auto h-7" src="/assets/all_icons_used/logo.svg" alt="Keji" />
           <a
             href={`https://mail.google.com/mail/?view=cm&fs=1&to=${import.meta.env.VITE_CONTACT_EMAIL || 'your-email@example.com'}`}
             target="_blank"
@@ -96,35 +96,35 @@ function App() {
           <div className="absolute inset-0 pointer-events-none">
             {/* 1. left Top */}
             <img
-              src="/assets/all_icons_used/emojione-monotone_hot-dog.png"
+              src="/assets/all_icons_used/emojione-monotone_hot-dog.svg"
               alt=""
               className="absolute top-[17rem] left-[5rem] h-8 w-auto"
             />
 
             {/* 2. right Top */}
             <img
-              src="assets\all_icons_used\Vector.png"
+              src="\assets\all_icons_used\uil_food.svg"
               alt=""
               className="absolute top-[17rem] right-[5rem] h-10 w-auto"
             />
 
             {/* 3. left Center */}
             <img
-              src="/assets/all_icons_used/flowbite_bowl-food-outline.png"
+              src="/assets/all_icons_used/flowbite_bowl-food-outline.svg"
               alt=""
               className="absolute top-[23rem] left-[0rem] h-16 w-auto"
             />
 
             {/* 4. right Center */}
             <img
-              src="/assets/all_icons_used/famicons_fast-food-outline.png"
+              src="/assets/all_icons_used/famicons_fast-food-outline.svg"
               alt=""
               className="absolute top-[33rem] right-[3rem] h-9 w-auto"
             />
 
             {/* 5. left Bottom */}
             <img
-              src="/assets/all_icons_used/mdi_food-ramen.png"
+              src="/assets/all_icons_used/mdi_food-ramen.svg"
               alt=""
               className="absolute top-[40rem] left-[0rem] h-12 w-auto"
             />
@@ -251,7 +251,7 @@ function App() {
 
             {/* Item 1 */}
             <div className="flex flex-col items-center space-y-3">
-              <img className="w-8 h-auto" src="\assets\all_icons_used\fluent_star-12-filled.png" alt="star" />
+              <img className="w-8 h-auto" src="\assets\all_icons_used\fluent_star-12-filled.svg" alt="star" />
               <p className="text-lg leading-relaxed">
                 Invitation to Join our <br />
                 Customer Advisory Board
@@ -260,7 +260,7 @@ function App() {
 
             {/* Item 2 */}
             <div className="flex flex-col items-center space-y-3">
-              <img className="w-8 h-auto" src="\assets\all_icons_used\fluent_star-12-filled.png" alt="star" />
+              <img className="w-8 h-auto" src="\assets\all_icons_used\fluent_star-12-filled.svg" alt="star" />
               <p className="text-lg leading-relaxed">
                 Free 1-month premium <br />
                 access when we launch
@@ -269,7 +269,7 @@ function App() {
 
             {/* Item 3 */}
             <div className="flex flex-col items-center space-y-3">
-              <img className="w-8 h-auto" src="\assets\all_icons_used\fluent_star-12-filled.png" alt="star" />
+              <img className="w-8 h-auto" src="\assets\all_icons_used\fluent_star-12-filled.svg" alt="star" />
               <p className="text-lg leading-relaxed">
                 Access to our Exclusive <br />
                 community for testers <br />

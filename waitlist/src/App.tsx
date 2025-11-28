@@ -4,7 +4,6 @@ import SlideModal from './components/SlideModal';
 
 function App() {
   const [isModalOpen, setIsModalOpen] = useState(false);
-  const [email, setEmail] = useState('');
   const [isJollofModalOpen, setIsJollofModalOpen] = useState(false);
   const [isShawarmaModalOpen, setIsShawarmaModalOpen] = useState(false);
   const [isJoinWaitlistModalOpen, setIsJoinWaitlistModalOpen] = useState(false);
@@ -19,13 +18,6 @@ function App() {
 
   const handleShawarmaClick = () => {
     setIsShawarmaModalOpen(true);
-  };
-
-  const handleModalSubmit = (value: string) => {
-    console.log('Email submitted:', value);
-    // Handle form submission here
-    setEmail('');
-    setIsModalOpen(false);
   };
 
   const handleJoinWaitlistClick = () => {

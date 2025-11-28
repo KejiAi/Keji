@@ -1,7 +1,7 @@
 {
   "functions": {
     "api/submit.ts": {
-      "runtime": "@vercel/node"
+      "runtime": "nodejs18.x"
     }
   },
   "rewrites": [

@@ -21,8 +21,17 @@ function App() {
   };
 
   const handleJoinWaitlistClick = () => {
-    // Show the slide modal first
-    setIsJoinWaitlistModalOpen(true);
+    // Scroll to first section first
+    const firstSection = document.getElementById('first-section');
+    if (firstSection) {
+      firstSection.scrollIntoView({ behavior: 'smooth' });
+      // Show the slide modal after scroll starts
+      setTimeout(() => {
+        setIsJoinWaitlistModalOpen(true);
+      }, 500);
+    } else {
+      setIsJoinWaitlistModalOpen(true);
+    }
   };
 
   const handleJoinWaitlistModalClose = () => {
@@ -61,13 +70,22 @@ function App() {
         {/* header */}
         <div className="flex justify-between items-center">
           <img className="w-auto h-7" src="/assets/all_icons_used/logo.png" alt="Keji" />
-          <button className="text-white px-3 py-1 border border-white rounded-xl hover:text-primary hover:bg-white transition-colors">Contact us</button>
+          <a
+            href={`https://mail.google.com/mail/?view=cm&fs=1&to=${import.meta.env.VITE_CONTACT_EMAIL || 'your-email@example.com'}`}
+            target="_blank"
+            rel="noopener noreferrer"
+          >
+            <button className="text-white px-3 py-1 border border-white rounded-xl hover:text-primary hover:bg-white transition-colors">
+              Contact us
+            </button>
+          </a>
+
         </div>
 
         {/* hero */}
         <div className="flex justify-center items-center mt-14 mb-5">
-          <h1 className="font-heading font-bold text-[#FBF6F6] text-4xl text-center">
-            Wetin I fit chop with that money?
+          <h1 className="font-heading font-bold text-white text-4xl text-center">
+            Wetin I fit chop with this cash?
           </h1>
         </div>
 
@@ -268,8 +286,17 @@ function App() {
             Join Waitlist
           </button>
 
-          <p className="text-[#8B8B8B] mb-12 text-lg">©2025   |   KejiAi   |  Contact</p>
-          
+          <p className="text-[#8B8B8B] mb-12 text-lg">
+            ©2025   |   KejiAi   |   {' '}
+            <a
+              className='underline'
+              href={`https://mail.google.com/mail/?view=cm&fs=1&to=${import.meta.env.VITE_CONTACT_EMAIL || 'your-email@example.com'}`}
+              target="_blank"
+              rel="noopener noreferrer"
+            >
+              Contact
+            </a>
+          </p>         
         </div>
       </div>
 
@@ -298,7 +325,7 @@ function App() {
         isOpen={isJoinWaitlistModalOpen}
         onClose={handleJoinWaitlistModalClose}
         message="Solve the puzzle to get access"
-        duration={2000}
+        duration={3000}
       />
     </div>
   );

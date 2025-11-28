@@ -23,11 +23,27 @@ export default async function handler(
 
     const sql = neon(databaseUrl);
 
+    // Check if email or phone already exists
+    const existingEntry = await sql`
+      SELECT email, phone FROM waitlist 
+      WHERE email = ${email} OR phone = ${phone}
+      LIMIT 1
+    `;
+
+    if (existingEntry.length > 0) {
+      const entry = existingEntry[0];
+      if (entry.email === email) {
+        return res.status(409).json({ error: 'This email is already registered on the waitlist' });
+      }
+      if (entry.phone === phone) {
+        return res.status(409).json({ error: 'This phone number is already registered on the waitlist' });
+      }
+    }
+
     // Insert the new entry
     await sql`
       INSERT INTO waitlist (name, email, phone)
       VALUES (${name}, ${email}, ${phone})
-      ON CONFLICT (email) DO NOTHING
     `;
 
     return res.status(200).json({ message: 'Successfully added to waitlist' });

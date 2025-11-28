@@ -22,10 +22,6 @@ export default {
         'heading': ['Funnel Display', 'sans-serif'],
         'body': ['Manrope', 'sans-serif'],
       },
-      fontWeight: {
-        'heading': '600',
-        'body': '500',
-      },
     },
   },
   plugins: [],

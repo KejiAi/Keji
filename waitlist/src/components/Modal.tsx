@@ -180,7 +180,7 @@ function Modal({
               onChange={(e) => setName(e.target.value)}
               placeholder="e.g Timee, or John"
               required
-              className="w-full px-4 py-[1rem] rounded-xl border border-borderLine font-body text-black placeholder-black/40 focus:outline-none focus:ring-1 focus:ring-primary"
+              className="w-full px-4 py-[1rem] rounded-xl border border-borderLine font-body text-black placeholder-placeHolder focus:outline-none focus:ring-1 focus:ring-primary"
             />
           </div>
 
@@ -193,7 +193,7 @@ function Modal({
               onChange={(e) => setEmail(e.target.value)}
               placeholder="e.g timee@gmail.com"
               required
-              className="w-full px-4 py-[1rem] rounded-xl border border-borderLine font-body text-black placeholder-black/40 focus:outline-none focus:ring-1 focus:ring-primary"
+              className="w-full px-4 py-[1rem] rounded-xl border border-borderLine font-body text-black placeholder-placeHolder focus:outline-none focus:ring-1 focus:ring-primary"
             />
           </div>
 
@@ -220,7 +220,7 @@ function Modal({
                 onChange={(e) => setPhone(e.target.value)}
                 placeholder="e.g 812 345 6789"
                 required
-                className="flex-1 font-body text-black placeholder-black/40 border-none focus:outline-none"
+                className="flex-1 font-body text-black placeholder-placeHolder border-none focus:outline-none"
               />
 
             </div>

@@ -18,6 +18,7 @@ logger = logging.getLogger(__name__)
 
 # Configuration
 RECENT_MESSAGES_COUNT = 10  # Number of recent messages to include (5 user + 5 bot turns)
+MODEL_FOR_CHAT = "gpt-4o"   # Main model for chat (used by get_response.py)
 
 def count_tokens(text: str, model: str = "gpt-4") -> int:
     """

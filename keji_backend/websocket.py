@@ -843,7 +843,8 @@ def handle_accept_recommendation(data):
     Expected data format:
     {
         'title': str,
-        'content': str
+        'content': str,
+        'userMessage': str
     }
     """
     try:
@@ -859,9 +860,10 @@ def handle_accept_recommendation(data):
         
         title = data.get("title")
         content = data.get("content")
+        user_message = data.get("userMessage", f"Thanks, I'm eating {title}")
         
-        if not title or not content:
-            emit('error', {'message': 'Missing title or content'})
+        if not title:
+            emit('error', {'message': 'Missing title'})
             return
         
         logger.info(f"Accepting recommendation: {title} (User: {current_user.name})")
@@ -881,21 +883,31 @@ def handle_accept_recommendation(data):
             emit('error', {'message': 'No conversation found'})
             return
 
-        # Save recommendation as a bot message
+        # Save AI recommendation as a bot message (just the title, no health benefits)
         bot_msg = Message(
             conversation_id=conversation.id,
             sender="bot",
-            text=f"{title}: {content}"
+            text=title
         )
         db.session.add(bot_msg)
+        
+        # Save user's acceptance message as a user message
+        user_msg = Message(
+            conversation_id=conversation.id,
+            sender="user",
+            text=user_message
+        )
+        db.session.add(user_msg)
+        
         db.session.commit()
         
-        logger.info("Recommendation saved to database")
+        logger.info(f"Recommendation accepted and saved: AI='{title}', User='{user_message}'")
 
-        # Confirm to client
+        # Confirm to client that messages were saved
         emit('recommendation_saved', {
             'status': 'saved',
-            'message_id': bot_msg.id,
+            'bot_message_id': bot_msg.id,
+            'user_message_id': user_msg.id,
             'timestamp': bot_msg.timestamp.isoformat()
         })
         
@@ -903,6 +915,58 @@ def handle_accept_recommendation(data):
         logger.error(f"Database error saving recommendation: {str(e)}", exc_info=True)
         db.session.rollback()
         emit('error', {'message': 'Failed to save recommendation'})
+        return
+
+    # Now process the user's acceptance through normal AI flow for a response
+    try:
+        logger.info("Processing acceptance through AI for confirmation response...")
+        
+        # Get conversation history for context
+        filtered_history = process_conversation_context(conversation, user_message, db.session)[0]
+        
+        # Get user's chat style preference
+        chat_style = current_user.chat_style if hasattr(current_user, 'chat_style') else None
+        
+        # Build messages for AI context
+        messages = [{"role": "user", "content": user_message}]
+        
+        # Call AI to generate a confirmation response
+        bot_reply = call_llm(
+            messages,
+            user_name=current_user.name,
+            conversation_history=filtered_history,
+            chat_style=chat_style,
+        )
+        
+        # Get the response text
+        reply_text = bot_reply.get("content") if isinstance(bot_reply, dict) else str(bot_reply)
+        
+        if not reply_text:
+            reply_text = "Great choice! Enjoy your meal!"
+        
+        # Save AI confirmation response
+        confirmation_msg = Message(
+            conversation_id=conversation.id,
+            sender="bot",
+            text=reply_text
+        )
+        db.session.add(confirmation_msg)
+        db.session.commit()
+        
+        logger.info(f"AI confirmation saved: '{reply_text[:50]}...'")
+        
+        # Send AI confirmation to client
+        emit('receive_message', {
+            'type': 'chat',
+            'role': 'assistant',
+            'content': reply_text,
+            'message_id': confirmation_msg.id,
+            'timestamp': confirmation_msg.timestamp.isoformat()
+        })
+        
+    except Exception as e:
+        logger.error(f"Error generating AI confirmation: {str(e)}", exc_info=True)
+        # Don't fail the whole flow, just log the error
 
 
 @socketio.on('request_history')

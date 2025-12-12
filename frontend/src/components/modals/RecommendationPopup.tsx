@@ -1,5 +1,4 @@
 import { Button } from "@/components/ui/button";
-import { getBackendUrl } from "@/lib/utils";
 import { useState } from "react";
 
 interface RecommendationPopupProps {
@@ -38,37 +37,10 @@ const RecommendationPopup = ({ recommendation, onClose, onAccept }: Recommendati
     setIsHealthModalVisible(true);
   };
 
-  const handleAccept = async () => {
-    try {
-      // Send title and content to backend
-      const response = await fetch(`${getBackendUrl()}/accept_recommendation`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        credentials: 'include',
-        body: JSON.stringify({
-          title: recommendation.title,
-          content: recommendation.content
-        })
-      });
-
-      if (response.ok) {
-        // Use the title as the acceptance message
-        const acceptanceMessage = `Thanks, I'm eating ${recommendation.title}`;
-        onAccept(acceptanceMessage);
-      } else {
-        console.error('Failed to accept recommendation');
-        // Still proceed with acceptance even if backend fails
-        const acceptanceMessage = `${recommendation.title} not received. Lets do this again`;
-        onAccept(acceptanceMessage);
-      }
-    } catch (error) {
-      console.error('Error accepting recommendation:', error);
-      // Still proceed with acceptance even if backend fails
-      const acceptanceMessage = `${recommendation.title} not received. Lets do this again`;
-      onAccept(acceptanceMessage);
-    }
+  const handleAccept = () => {
+    // Generate acceptance message and let parent handle WebSocket communication
+    const acceptanceMessage = `Thanks, I'm eating ${recommendation.title}`;
+    onAccept(acceptanceMessage);
   };
 
   return (

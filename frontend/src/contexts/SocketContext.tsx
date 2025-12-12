@@ -76,7 +76,7 @@ interface SocketContextType {
   connectionAttempts: number;
   hasSyncedHistory: boolean;
   sendMessage: (message: string, files?: OutgoingFile[], clientMessageId?: string) => void;
-  acceptRecommendation: (title: string, content: string) => void;
+  acceptRecommendation: (title: string, content: string, userMessage: string) => void;
   requestHistory: () => void;
   onReceiveMessage: (callback: (data: SocketMessage) => void) => () => void;
   onReceiveChunk: (callback: (data: SocketChunk) => void) => () => void;
@@ -337,7 +337,7 @@ export const SocketProvider: React.FC<SocketProviderProps> = ({ children }) => {
     });
   }, [socket, isConnected]);
 
-  const acceptRecommendation = useCallback((title: string, content: string) => {
+  const acceptRecommendation = useCallback((title: string, content: string, userMessage: string) => {
     if (!socket || !isConnected) {
       console.error('❌ Cannot accept recommendation: Socket not connected');
       return;
@@ -347,6 +347,7 @@ export const SocketProvider: React.FC<SocketProviderProps> = ({ children }) => {
     socket.emit('accept_recommendation', {
       title,
       content,
+      userMessage,
     });
   }, [socket, isConnected]);
 

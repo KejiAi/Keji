@@ -56,36 +56,65 @@ def _get_openai_client():
     """Create OpenAI client in thread context (fresh SSL, no eventlet patch)"""
     return OpenAI()
 
-def classify_llm(prompt, conversation_history=None):
+def classify_llm(prompt, conversation_history=None, user_name=None, time_of_day=None, chat_style=None):
     """
-    Classify user intent with conversation context.
+    Classify user intent AND respond directly for chat intents.
+    Uses dedicated chat prompt for classification + response in one call.
     
     Args:
-        prompt: The classification prompt
+        prompt: The classification prompt with user input
         conversation_history: Optional list of last 10 conversation messages for context
+        user_name: Optional user's name for personalization
+        time_of_day: Optional time period for greetings
+        chat_style: Optional language style preference
     
     Returns:
-        str: JSON classification result
+        str: JSON result with classification (and response for chat type)
     """
     if not IS_PRODUCTION:
         logger.debug("Non-production environment: skipping OpenAI classify call")
-        # Return a simple chat classification so flow continues
-        return json.dumps({"chat": "dev_mode"})
+        # Return a simple chat classification with dev response
+        return json.dumps({"type": "chat", "response": "Hey! I'm in dev mode. What's on your mind?"})
 
-    logger.debug("Classifying user intent...")
+    logger.debug("Classifying user intent (with chat response capability)...")
+    
+    # Load the chat classifier prompt
+    chat_prompt_path = os.path.join(os.path.dirname(__file__), 'keji_chat_prompt.txt')
+    try:
+        with open(chat_prompt_path, 'r', encoding='utf-8') as f:
+            system_prompt = f.read()
+    except FileNotFoundError:
+        logger.warning("keji_chat_prompt.txt not found, using fallback")
+        system_prompt = "You are a classifier. Always respond in JSON format."
+    
+    # Add context to system prompt
+    context_additions = []
+    if user_name:
+        context_additions.append(f"User's name: {user_name}")
+    if time_of_day:
+        context_additions.append(f"Time of day: {time_of_day}")
+    if chat_style:
+        context_additions.append(f"Chat style preference: {chat_style}")
+    
+    if context_additions:
+        system_prompt += "\n\nCURRENT CONTEXT:\n" + "\n".join(context_additions)
     
     # Build messages array with conversation history
-    messages = [{"role": "system", "content": "You are a helpful assistant. Always respond in JSON format."}]
+    messages = [{"role": "system", "content": system_prompt}]
     
-    # Add last 10 messages from conversation history if provided
+    # Add conversation history if provided (includes memory summary for context)
     if conversation_history:
         # Take only last 10 messages for context
         recent_history = conversation_history[-10:] if len(conversation_history) > 10 else conversation_history
         logger.debug(f"Including {len(recent_history)} recent messages for context")
         
         for hist_msg in recent_history:
-            # Skip system messages with memory summaries to avoid confusion
-            if not (hist_msg.get('role') == 'system' and 'CONVERSATION CONTEXT' in hist_msg.get('content', '')):
+            # Include memory summaries - they provide important conversation context
+            if hist_msg.get('role') == 'system' and 'CONVERSATION CONTEXT' in hist_msg.get('content', ''):
+                # Add summary AFTER main system prompt for proper context
+                messages.append(hist_msg)
+                logger.debug("Including memory summary for chat context")
+            else:
                 messages.append(hist_msg)
     
     # Add the classification prompt
@@ -411,75 +440,81 @@ def call_llm(
         }
 
 
-def classify_intent(user_input, conversation_history=None):
+def classify_intent(user_input, conversation_history=None, user_name=None, time_of_day=None, chat_style=None):
     """
-    Classify user intent based on their input and conversation context.
+    Classify user intent AND get response for chat in a single LLM call.
     
     Args:
         user_input: The user's current message
         conversation_history: Optional list of previous conversation messages
+        user_name: Optional user's name for personalization
+        time_of_day: Optional time period for greetings
+        chat_style: Optional language style preference
     
     Returns:
-        dict: Classification result with intent type
+        dict: Classification result with intent type (and response for chat)
     """
     if not IS_PRODUCTION:
         logger.info("Non-production environment: using dummy classifier (CHAT intent)")
         logger.info("="*60 + "\n")
-        return {"chat": user_input}
+        return {"type": "chat", "response": f"Dev mode response to: {user_input}"}
 
-    logger.info("Classifying intent...")
+    logger.info("Classifying intent (single-call with response)...")
     logger.debug(f"Input: {len(user_input)} chars")
     
-    prompt = f"""
-    You are a classifier. Use the conversation history (if available) to understand context.
-    Read the user's current message and classify it into one of the following intents:
-    
-    - decision: if the user has decided on what to eat or is confirming a food choice.
-      Return: {{"decision": "food_item_they_chose"}}
-      Examples: "I'll take that", "okay", "yes", "sounds good", "I want that one", "let me have rice and beans"
-      IMPORTANT: Use conversation context to identify what food they're deciding on!
-    
-    - budget: if they mention money, naira, price, or how much they can spend.
-      Return: {{"budget": number}}
-      Examples: "I have 500 naira", "what about 1000?", "2k budget"
-      
-    - ingredient: if they mention ingredients they have or ask what to cook with them.
-      Ensure ingredients are properly spelled and normalized (e.g., "rice", "beans").
-      Return: {{"ingredient": ["item1", "item2", ...]}}
-      Examples: "I have rice and beans", "what can I cook with these?"
-      
-    - chat: if it is casual talk or not related to budget, ingredients, or decisions.
-      Return: {{"chat": "original_message"}}
-      Examples: "hello", "tell me more about that", "what else can you help with?"
+    prompt = f"""Classify this message and respond if it's general chat.
 
-    IMPORTANT CONTEXT RULES:
-    - If user says "that one", "it", "yes", "okay" after a food recommendation, classify as DECISION
-    - If they refer to something from previous conversation, use context to understand
-    - Look at the conversation history to determine what they're referring to
+Current user message: "{user_input}"
 
-    Current user message: "{user_input}"
-    Answer (JSON only):
-    """
+Remember:
+- budget: Return {{"type": "budget", "value": number}}
+- ingredient: Return {{"type": "ingredient", "value": ["item1", "item2"]}}
+- decision: Return {{"type": "decision", "value": "food_they_chose"}}
+- chat: Return {{"type": "chat", "response": "your_friendly_response"}}
+
+Answer (JSON only):"""
     
-    result = classify_llm(prompt, conversation_history=conversation_history).strip()
+    result = classify_llm(
+        prompt, 
+        conversation_history=conversation_history,
+        user_name=user_name,
+        time_of_day=time_of_day,
+        chat_style=chat_style
+    ).strip()
+    
+    # Strip markdown code blocks if present (OpenAI sometimes wraps JSON in ```json ... ```)
+    if result.startswith('```'):
+        lines = result.split('\n')
+        if lines[0].startswith('```'):
+            lines = lines[1:]
+        if lines and lines[-1].strip() == '```':
+            lines = lines[:-1]
+        result = '\n'.join(lines).strip()
+        logger.debug("Stripped markdown code blocks from classification response")
     
     try:
         parsed = json.loads(result)
-        if "decision" in parsed:
-            logger.info(f"Intent: DECISION ({parsed['decision']})")
-        elif "budget" in parsed:
-            logger.info(f"Intent: BUDGET (N{parsed['budget']})")
-        elif "ingredient" in parsed:
-            logger.info(f"Intent: INGREDIENT ({', '.join(parsed['ingredient'])})")
+        intent_type = parsed.get("type", "chat")
+        
+        if intent_type == "decision":
+            logger.info(f"Intent: DECISION ({parsed.get('value', 'unknown')})")
+        elif intent_type == "budget":
+            logger.info(f"Intent: BUDGET (N{parsed.get('value', 0)})")
+        elif intent_type == "ingredient":
+            ingredients = parsed.get('value', [])
+            logger.info(f"Intent: INGREDIENT ({', '.join(ingredients) if ingredients else 'none'})")
         else:
-            logger.info("Intent: CHAT")
+            response_preview = parsed.get('response', '')[:50]
+            logger.info(f"Intent: CHAT (response: {response_preview}...)")
+        
         logger.info("="*60 + "\n")
         return parsed
-    except json.JSONDecodeError:
-        logger.warning("Failed to parse intent, defaulting to CHAT")
+    except json.JSONDecodeError as e:
+        logger.warning(f"Failed to parse intent JSON: {str(e)}")
+        logger.warning(f"   Raw result: {result[:200]}...")
         logger.info("="*60 + "\n")
-        # fallback: wrap as chat if parsing fails
-        return {"chat": user_input}
+        # fallback: return chat with original message as response
+        return {"type": "chat", "response": f"I didn't quite catch that. Could you rephrase?"}
     
 def get_foods_by_budget(budget):
     logger.debug("\n" + "-"*60)
@@ -565,10 +600,19 @@ def handle_user_input(user_input, user_name=None, conversation_history=None, tim
     if image_base64_data:
         logger.info(f"   With {len(image_base64_data)} image(s) for vision API")
     
-    intent = classify_intent(user_input, conversation_history=conversation_history)
+    logger.info("Step 1: Classifying intent (with chat response)...")
+    intent = classify_intent(
+        user_input, 
+        conversation_history=conversation_history,
+        user_name=user_name,
+        time_of_day=time_of_day,
+        chat_style=chat_style
+    )
+    intent_type = intent.get("type", "chat")
+    logger.info(f"Step 2: Classification result: {intent_type}")
 
-    if "decision" in intent:
-        decision = intent.get("decision", "that")
+    if intent_type == "decision":
+        decision = intent.get("value", "that")
         logger.info(f"Processing DECISION intent: '{decision}'")
         
         # User has made a decision - acknowledge it with a confirmation
@@ -593,8 +637,8 @@ def handle_user_input(user_input, user_name=None, conversation_history=None, tim
         logger.info("Decision confirmation generated")
         return result
     
-    elif "budget" in intent:
-        budget = intent.get("budget", 0)
+    elif intent_type == "budget":
+        budget = intent.get("value", 0)
         logger.info(f"Processing BUDGET intent: N{budget}")
         foods = get_foods_by_budget(budget)
         
@@ -645,9 +689,11 @@ def handle_user_input(user_input, user_name=None, conversation_history=None, tim
             logger.info("Food recommendation generated")
             return result
 
-    elif "ingredient" in intent:
-        ingredients = intent.get("ingredient", [])
-        logger.info(f"Processing INGREDIENT intent: {', '.join(ingredients)}")
+    elif intent_type == "ingredient":
+        ingredients = intent.get("value", [])
+        if not isinstance(ingredients, list):
+            ingredients = [ingredients] if ingredients else []
+        logger.info(f"Processing INGREDIENT intent: {', '.join(ingredients) if ingredients else 'none'}")
         foods = get_meals_by_ingredients(ingredients)
         
         if not foods:
@@ -698,23 +744,17 @@ def handle_user_input(user_input, user_name=None, conversation_history=None, tim
             return result
 
     else:
-        # General chat - no specific intent detected
-        logger.info("Processing CHAT intent")
-        chat_message = intent.get("chat", user_input)
-        context = {}
-        if chat_style:
-            context["chat_style"] = chat_style
-        result = call_llm(
-            chat_message,
-            user_name=user_name,
-            additional_context=context or None,
-            conversation_history=conversation_history,
-            time_of_day=time_of_day,
-            chat_style=chat_style,
-            image_base64_data=image_base64_data,
-        )
-        logger.info("Chat response generated")
-        return result
+        # General chat - response already generated by classify_intent
+        logger.info("Processing CHAT intent (using classify response directly)")
+        chat_response = intent.get("response", "Hey! How can I help you today?")
+        logger.info(f"Chat response ready (no 2nd LLM call): {len(chat_response)} chars")
+        
+        # Return in the standard chat format
+        return {
+            "type": "chat",
+            "role": "assistant",
+            "content": chat_response
+        }
 
 
 if __name__ == "__main__":

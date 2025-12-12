@@ -906,24 +906,32 @@ const Chat = () => {
     // Save the recommendation via WebSocket
     if (recommendation) {
       console.log('✅ Accepting recommendation via WebSocket:', recommendation.title);
-      socketAcceptRecommendation(recommendation.title, recommendation.content);
+      socketAcceptRecommendation(recommendation.title, recommendation.content, acceptanceMessage);
       
-      // Add the recommendation to the message list
-      const recMessage: Message = {
+      // Add AI message with just the title (no health benefits)
+      const aiMessage: Message = {
         id: Date.now().toString(),
-        text: `${recommendation.title}: ${recommendation.content}`,
+        text: recommendation.title,
         sender: "ai",
         timestamp: new Date(),
       };
-      setMessages((prev) => [...prev, recMessage]);
+      
+      // Add user's acceptance message
+      const userMessage: Message = {
+        id: (Date.now() + 1).toString(),
+        text: acceptanceMessage,
+        sender: "user",
+        timestamp: new Date(),
+      };
+      
+      setMessages((prev) => [...prev, aiMessage, userMessage]);
+      
+      // Show loading indicator while waiting for AI confirmation response
+      setLoading(true);
+      setLoadingMessage("Keji is thinking");
     }
     
     setRecommendation(null);
-    
-    // Send the acceptance message
-    if (acceptanceMessage) {
-      sendMessage(acceptanceMessage);
-    }
   };
 
   // Show loading while session is being validated

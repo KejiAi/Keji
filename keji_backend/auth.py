@@ -708,14 +708,18 @@ def init_scheduler(app):
             except Exception as e:
                 logger.error(f"❌ Database keep-alive ping failed: {str(e)}", exc_info=True)
     
-    # Register jobs
+    # Register auth jobs
     scheduler.add_job(cleanup_job, 'interval', hours=1, id='cleanup_job')
     scheduler.add_job(keep_db_alive, 'interval', minutes=4, id='keep_db_alive')
+    
+    # Register worker jobs (summary generation, daily chat clearing)
+    from workers import register_workers
+    register_workers(scheduler, app)
     
     # Start scheduler
     if not scheduler.running:
         scheduler.start()
-        logger.info("Background scheduler started with cleanup and keep-alive jobs")
+        logger.info("Background scheduler started with all jobs (cleanup, keep-alive, summary, chat-clearing)")
 
 
 # ==================== GOOGLE OAUTH ROUTES ====================

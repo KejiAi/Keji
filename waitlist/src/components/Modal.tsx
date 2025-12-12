@@ -1,26 +1,15 @@
 import { useState, useEffect } from 'react';
-import type { ReactNode } from 'react';
 
 interface ModalProps {
   isOpen: boolean;
   onClose: () => void;
-  title?: string;
-  children?: ReactNode;
-  formField?: {
-    label: string;
-    placeholder?: string;
-    type?: 'text' | 'email' | 'password' | 'number' | 'tel';
-    value: string;
-    onChange: (value: string) => void;
-    required?: boolean;
-  };
-  onSubmit?: (value: string) => void;
-  submitLabel?: string;
+  onSuccess?: () => void;
 }
 
 function Modal({
   isOpen,
   onClose,
+  onSuccess,
 }: ModalProps) {
   const [isAnimating, setIsAnimating] = useState(false);
   const [name, setName] = useState('');
@@ -102,7 +91,7 @@ function Modal({
       // Handle empty or invalid responses
       const text = await response.text();
       if (!text) {
-        throw new Error('Empty response from server. Please check your API configuration.');
+        throw new Error('Server error. Please try again later.');
       }
       
       let data;
@@ -118,7 +107,11 @@ function Modal({
 
       setSuccess(true);
       setTimeout(() => {
-        onClose();
+        if (onSuccess) {
+          onSuccess();
+        } else {
+          onClose();
+        }
       }, 1500);
     } catch (err) {
       const errorMessage = err instanceof Error ? err.message : 'An error occurred. Please try again.';

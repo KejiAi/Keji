@@ -1,12 +1,19 @@
 import { useState } from 'react';
 import Modal from './components/Modal';
 import SlideModal from './components/SlideModal';
+import SuccessPage from './components/SuccessPage';
 
 function App() {
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [isJollofModalOpen, setIsJollofModalOpen] = useState(false);
   const [isShawarmaModalOpen, setIsShawarmaModalOpen] = useState(false);
   const [isJoinWaitlistModalOpen, setIsJoinWaitlistModalOpen] = useState(false);
+  const [showSuccessPage, setShowSuccessPage] = useState(false);
+
+  const handleRegistrationSuccess = () => {
+    setIsModalOpen(false);
+    setShowSuccessPage(true);
+  };
 
   const handleMoinmoinClick = () => {
     setIsModalOpen(true);
@@ -306,7 +313,15 @@ function App() {
       <Modal
         isOpen={isModalOpen}
         onClose={() => setIsModalOpen(false)}
+        onSuccess={handleRegistrationSuccess}
       />
+
+      {/* Success Page */}
+      {showSuccessPage && (
+        <SuccessPage 
+          onClose={() => setShowSuccessPage(false)}
+        />
+      )}
 
       {/* Slide Modals */}
       <SlideModal

@@ -375,7 +375,7 @@ def call_llm(
                 # Validate recommendation structure
                 if "type" in parsed and "role" in parsed and "title" in parsed and "content" in parsed:
                     logger.info(f"Recommendation: {parsed.get('title', 'N/A')}")
-                     return parsed
+                    return parsed
                 else:
                     logger.warning("Incomplete recommendation structure, using fallback")
                     logger.warning(f"   Missing fields - type: {'type' in parsed}, role: {'role' in parsed}, title: {'title' in parsed}, content: {'content' in parsed}")

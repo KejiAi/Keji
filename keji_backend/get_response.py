@@ -94,8 +94,11 @@ def classify_llm(prompt, conversation_history=None, user_name=None, time_of_day=
         context_additions.append(f"User's name: {user_name}")
     if time_of_day:
         context_additions.append(f"Time of day: {time_of_day}")
+    
+    # Add chat_style as a STRONG instruction (not just context)
     if chat_style:
-        context_additions.append(f"Chat style preference: {chat_style}")
+        style_instruction = f"\n\n**LANGUAGE INSTRUCTION (MUST FOLLOW):**\nUser selected: {chat_style}\nYou MUST respond in this style regardless of what language the user types in. Do NOT switch styles based on user's message language."
+        system_prompt += style_instruction
     
     if context_additions:
         system_prompt += "\n\nCURRENT CONTEXT:\n" + "\n".join(context_additions)
@@ -190,7 +193,7 @@ def call_llm(
     # Build context for the recommendation
     context_parts = []
     if chat_style:
-        context_parts.append(f"Chat style: {chat_style}")
+        context_parts.append(f"**LANGUAGE INSTRUCTION (MUST FOLLOW):** User selected {chat_style}. Respond ONLY in this style regardless of user's message language.")
     
     # Add food context from additional_context
     context_payload = dict(additional_context or {})

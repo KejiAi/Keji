@@ -1271,47 +1271,47 @@ const Chat = () => {
             )}
 
             {/* Hidden file input */}
-            <input
-              ref={fileInputRef}
-              type="file"
-              multiple
-              accept=".jpg,.jpeg,.png,.pdf,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.txt"
-              className="hidden"
-              onChange={handleFileChange}
-            />
-            
+              <input
+                ref={fileInputRef}
+                type="file"
+                multiple
+                accept=".jpg,.jpeg,.png,.pdf,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.txt"
+                className="hidden"
+                onChange={handleFileChange}
+              />
+
             {/* Chat input placeholder - displayed above */}
-            <div 
+              <div 
               className="flex items-end p-2 flex-1 mx-4 mt-3 transition-all duration-200"
               style={textareaHeight > 48 ? { 
-                borderRadius: `${borderRadius}px`,
+                  borderRadius: `${borderRadius}px`,
                 minHeight: `${textareaHeight + 16}px`
               } : { borderRadius: '24px' }}
             > 
-              <Textarea
-                ref={inputRef}
-                value={inputMessage}
-                onChange={(e) => setInputMessage(e.target.value)}
-                placeholder="What can I eat this morn?"
+                <Textarea
+                  ref={inputRef}
+                  value={inputMessage}
+                  onChange={(e) => setInputMessage(e.target.value)}
+                  placeholder="What can I eat this morn?"
                 className="flex-1 bg-transparent text-base placeholder:text-muted-foreground/70 placeholder:text-base px-2 py-3 resize-none min-h-[48px]"
-                onKeyDown={(e) => {
-                  const isMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
-                  if (e.key === "Enter") {
-                    if (isMobile) {
-                      if (e.ctrlKey || e.metaKey) {
-                        e.preventDefault();
-                        handleSendMessage();
-                      }
-                    } else {
-                      if (!e.shiftKey) {
-                        e.preventDefault();
-                        handleSendMessage();
+                  onKeyDown={(e) => {
+                    const isMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
+                    if (e.key === "Enter") {
+                      if (isMobile) {
+                        if (e.ctrlKey || e.metaKey) {
+                          e.preventDefault();
+                          handleSendMessage();
+                        }
+                      } else {
+                        if (!e.shiftKey) {
+                          e.preventDefault();
+                          handleSendMessage();
+                        }
                       }
                     }
-                  }
-                }}
-                rows={1}
-              />
+                  }}
+                  rows={1}
+                />
             </div>
 
             {/* Buttons container - displayed below and centralized */}
@@ -1334,23 +1334,23 @@ const Chat = () => {
                   <span className="sr-only">Voice input</span>
                 </Button>
 
-                <Button
-                  variant="ghost"
-                  size="icon"
+              <Button
+                variant="ghost"
+                size="icon"
                   className="h-[44px] w-[44px] rounded-full bg-black flex-shrink-0 p-0"
                   onClick={handleSendMessage}
                   disabled={
                     loading ||
                     (!inputMessage.trim() && selectedFiles.length === 0)
                   }
-                >
-                  <img
+              >
+                <img
                     src="assets/All Icon Used/iconamoon_send-fill-HP.png"
                     alt="Send"
                     className="h-6 w-6 object-contain"
-                  />
+                />
                   <span className="sr-only">Send message</span>
-                </Button>
+              </Button>
               </div>
             </div>
           </div>

@@ -59,24 +59,25 @@ def _get_openai_client():
 def classify_llm(prompt, conversation_history=None, user_name=None, time_of_day=None, chat_style=None):
     """
     Classify user intent AND respond directly for chat intents.
-    Uses dedicated chat prompt for classification + response in one call.
+    Uses keji_chat_prompt.txt for classification + chat responses.
     
     Args:
         prompt: The classification prompt with user input
         conversation_history: Optional list of last 10 conversation messages for context
         user_name: Optional user's name for personalization
         time_of_day: Optional time period for greetings
-        chat_style: Optional language style preference
+        chat_style: Optional language style preference (pure_english, more_english, pure_pidgin)
     
     Returns:
         str: JSON result with classification (and response for chat type)
     """
     if not IS_PRODUCTION:
         logger.debug("Non-production environment: skipping OpenAI classify call")
-        # Return a simple chat classification with dev response
         return json.dumps({"type": "chat", "response": "Hey! I'm in dev mode. What's on your mind?"})
 
-    logger.debug("Classifying user intent (with chat response capability)...")
+    logger.info("=" * 60)
+    logger.info("CLASSIFY_LLM: Classifying intent + chat response")
+    logger.info("=" * 60)
     
     # Load the chat classifier prompt
     chat_prompt_path = os.path.join(os.path.dirname(__file__), 'keji_chat_prompt.txt')
@@ -102,35 +103,28 @@ def classify_llm(prompt, conversation_history=None, user_name=None, time_of_day=
     # Build messages array with conversation history
     messages = [{"role": "system", "content": system_prompt}]
     
-    # Add conversation history if provided (includes memory summary for context)
+    # Add conversation history if provided (last 10 messages for context)
     if conversation_history:
-        # Take only last 10 messages for context
         recent_history = conversation_history[-10:] if len(conversation_history) > 10 else conversation_history
-        logger.debug(f"Including {len(recent_history)} recent messages for context")
+        logger.info(f"   Including {len(recent_history)} recent messages for classification context")
         
         for hist_msg in recent_history:
-            # Include memory summaries - they provide important conversation context
-            if hist_msg.get('role') == 'system' and 'CONVERSATION CONTEXT' in hist_msg.get('content', ''):
-                # Add summary AFTER main system prompt for proper context
-                messages.append(hist_msg)
-                logger.debug("Including memory summary for chat context")
-            else:
-                messages.append(hist_msg)
+            messages.append(hist_msg)
     
     # Add the classification prompt
     messages.append({"role": "user", "content": prompt})
     
-    logger.debug(f"Classification context: {len(messages)} messages")
+    logger.info(f"   Total messages: {len(messages)}")
+    logger.info(f"   Chat style: {chat_style or 'not set'}")
     
     def _call():
-        """Run in real thread with fresh OpenAI client - extract data before returning"""
+        """Run in real thread with fresh OpenAI client"""
         try:
             client = _get_openai_client()
             response = client.chat.completions.create(
                 model="gpt-4o-mini",
                 messages=messages
             )
-            # Extract content before returning (avoids greenlet issues)
             if response and hasattr(response, 'choices') and response.choices:
                 content = response.choices[0].message.content
                 return {"success": True, "content": content if content else ""}
@@ -142,11 +136,10 @@ def classify_llm(prompt, conversation_history=None, user_name=None, time_of_day=
     response_data = _openai_in_thread(_call)
     if not response_data or not isinstance(response_data, dict) or "error" in response_data:
         logger.error(f"Classification failed: {response_data.get('error', 'Unknown error') if isinstance(response_data, dict) else 'Invalid response'}")
-        return json.dumps({"chat": "error"})
+        return json.dumps({"type": "chat", "response": "Hey! How can I help you today?"})
     
     result = response_data.get("content", "")
-    logger.debug(f"Classification complete: {len(result)} chars")
-    logger.debug("\n")
+    logger.info(f"   Classification complete: {len(result)} chars")
     
     return result
 
@@ -154,90 +147,73 @@ def classify_llm(prompt, conversation_history=None, user_name=None, time_of_day=
 def call_llm(
     prompt,
     keji_prompt_path=None,
-    user_name=None,
     additional_context=None,
     conversation_history=None,
-    time_of_day=None,
     chat_style=None,
     image_base64_data=None,
 ):
     """
-    Call the LLM with Keji's personality and return structured response.
+    Call the LLM for RECOMMENDATIONS using keji_prompt.txt.
+    This function focuses on generating food recommendations with the last 20 chats for context.
     
     Args:
-        prompt: The user's message
+        prompt: The recommendation request (includes budget/ingredients context)
         keji_prompt_path: Path to the Keji prompt file (defaults to global keji_prompt_path)
-        user_name: Optional user's name for personalized greetings
-        additional_context: Optional dict with extra context (budget info, food options, etc.)
-        conversation_history: Optional list of previous messages (includes memory summary if available)
-        time_of_day: Optional time period ('morning', 'afternoon', 'evening', 'night')
-        chat_style: Optional user chat style preference
+        additional_context: Dict with food options, budget, ingredients, etc.
+        conversation_history: Last 20 messages for context
+        chat_style: Language style preference (pure_english, more_english, pure_pidgin)
         image_base64_data: Optional list of dicts with 'base64' and 'mime_type' for vision API
     
     Returns:
-        dict: Structured response with 'type', 'role', 'content', and optionally 'title' and 'health'
+        dict: Recommendation response with 'type', 'role', 'title', 'content', 'health'
     """
     if not IS_PRODUCTION:
         logger.info("Non-production environment: returning dummy LLM response")
         return {
-            "type": "chat",
+            "type": "recommendation",
             "role": "assistant",
-            "content": _build_dummy_response(prompt)
+            "title": "Rice and Beans",
+            "content": _build_dummy_response(prompt),
+            "health": [{"label": "Energy", "description": "Dev mode response"}]
         }
 
-    logger.info("Calling Keji AI...")
+    logger.info("=" * 60)
+    logger.info("CALL_LLM: Generating recommendation")
+    logger.info("=" * 60)
     
     if keji_prompt_path is None:
         keji_prompt_path = globals()['keji_prompt_path']
     
     with open(keji_prompt_path, "r", encoding="utf-8") as file:
         keji_prompt = file.read().strip()
-    
-    logger.debug(f"System prompt: {len(keji_prompt)} chars")
 
-    # Build the user message with context
-    user_message = prompt
-    context_payload = dict(additional_context or {})
-
+    # Build context for the recommendation
+    context_parts = []
     if chat_style:
-        logger.debug(f"Chat style preference: {chat_style}")
-        context_payload.setdefault("chat_style", chat_style)
-
-        style_instructions = {
-            "pure_english": "Respond purely in English with zero pidgin words. Keep tone friendly and natural.",
-            "more_english": "Respond mostly in English with at most one subtle pidgin expression if it fits naturally.",
-            "mix": "Blend English and Nigerian pidgin evenly while keeping sentences clear and respectful.",
-            "more_pidgin": "Use mostly Nigerian pidgin with occasional English words for clarity.",
-            "pure_pidgin": "Respond entirely in Nigerian pidgin while staying friendly and respectful.",
-        }
-        style_note = style_instructions.get(chat_style, style_instructions["pure_english"])
-        user_message = f"Chat style preference: {chat_style}\nInstruction: {style_note}\n{user_message}"
-    if user_name:
-        logger.debug(f"User name: {user_name}")
-        user_message = f"User name: {user_name}\n{user_message}"
-    if time_of_day:
-        logger.debug(f"Time of day: {time_of_day}")
-        user_message = f"Time of day: {time_of_day}\n{user_message}"
-    if context_payload:
-        logger.debug(f"Additional context: {list(context_payload.keys())}")
-        user_message += f"\n\nContext: {json.dumps(context_payload, ensure_ascii=False)}"
+        context_parts.append(f"Chat style: {chat_style}")
     
-    logger.debug(f"User message: {len(user_message)} chars")
-    logger.debug("Sending request to OpenAI...")
+    # Add food context from additional_context
+    context_payload = dict(additional_context or {})
+    if context_payload:
+        context_parts.append(f"Context: {json.dumps(context_payload, ensure_ascii=False)}")
+    
+    # Build the full prompt
+    user_message = prompt
+    if context_parts:
+        user_message = "\n".join(context_parts) + "\n\n" + prompt
+    
+    logger.info(f"   Chat style: {chat_style or 'not set'}")
+    logger.info(f"   Context keys: {list(context_payload.keys()) if context_payload else 'none'}")
 
-    # Build messages array with conversation history
+    # Build messages array with last 20 conversation messages
     messages = [{"role": "system", "content": keji_prompt}]
     
-    # Add conversation history if provided (already includes memory summary)
+    # Add conversation history (last 20 messages for recommendation context)
     if conversation_history:
-        logger.debug(f"Including {len(conversation_history)} messages from history")
-        for hist_msg in conversation_history:
-            # Skip duplicate system messages (summary is already included in history)
-            if not (hist_msg.get('role') == 'system' and 'CONVERSATION CONTEXT' in hist_msg.get('content', '')):
-                messages.append(hist_msg)
-            else:
-                # Add the summary as a system message AFTER the main system prompt
-                messages.append(hist_msg)
+        recent_history = conversation_history[-20:] if len(conversation_history) > 20 else conversation_history
+        logger.info(f"   Including {len(recent_history)} messages for recommendation context")
+        for hist_msg in recent_history:
+            messages.append(hist_msg)
     
     # Use base64 data for vision API if provided, otherwise try to extract URLs from message
     has_images = False
@@ -399,7 +375,7 @@ def call_llm(
                 # Validate recommendation structure
                 if "type" in parsed and "role" in parsed and "title" in parsed and "content" in parsed:
                     logger.info(f"Recommendation: {parsed.get('title', 'N/A')}")
-                    return parsed
+                     return parsed
                 else:
                     logger.warning("Incomplete recommendation structure, using fallback")
                     logger.warning(f"   Missing fields - type: {'type' in parsed}, role: {'role' in parsed}, title: {'title' in parsed}, content: {'content' in parsed}")
@@ -462,15 +438,14 @@ def classify_intent(user_input, conversation_history=None, user_name=None, time_
     logger.info("Classifying intent (single-call with response)...")
     logger.debug(f"Input: {len(user_input)} chars")
     
-    prompt = f"""Classify this message and respond if it's general chat.
+    prompt = f"""Classify this message and respond if it's chat (including decisions).
 
 Current user message: "{user_input}"
 
 Remember:
 - budget: Return {{"type": "budget", "value": number}}
 - ingredient: Return {{"type": "ingredient", "value": ["item1", "item2"]}}
-- decision: Return {{"type": "decision", "value": "food_they_chose"}}
-- chat: Return {{"type": "chat", "response": "your_friendly_response"}}
+- chat (or decision): Return {{"type": "chat", "response": "your_friendly_response"}}
 
 Answer (JSON only):"""
     
@@ -496,9 +471,7 @@ Answer (JSON only):"""
         parsed = json.loads(result)
         intent_type = parsed.get("type", "chat")
         
-        if intent_type == "decision":
-            logger.info(f"Intent: DECISION ({parsed.get('value', 'unknown')})")
-        elif intent_type == "budget":
+        if intent_type == "budget":
             logger.info(f"Intent: BUDGET (N{parsed.get('value', 0)})")
         elif intent_type == "ingredient":
             ingredients = parsed.get('value', [])
@@ -611,33 +584,7 @@ def handle_user_input(user_input, user_name=None, conversation_history=None, tim
     intent_type = intent.get("type", "chat")
     logger.info(f"Step 2: Classification result: {intent_type}")
 
-    if intent_type == "decision":
-        decision = intent.get("value", "that")
-        logger.info(f"Processing DECISION intent: '{decision}'")
-        
-        # User has made a decision - acknowledge it with a confirmation
-        context = {
-            "decision": decision,
-            "note": "User has decided on what to eat"
-        }
-        if chat_style:
-            context["chat_style"] = chat_style
-        prompt = f"User has decided to eat '{decision}'. Confirm their choice with a SHORT, encouraging message (1-2 sentences). Be friendly and supportive!"
-        logger.debug(f"   Confirming user's decision: {decision}")
-        
-        result = call_llm(
-            prompt,
-            user_name=user_name,
-            additional_context=context,
-            conversation_history=conversation_history,
-            time_of_day=time_of_day,
-            chat_style=chat_style,
-            image_base64_data=image_base64_data,
-        )
-        logger.info("Decision confirmation generated")
-        return result
-    
-    elif intent_type == "budget":
+    if intent_type == "budget":
         budget = intent.get("value", 0)
         logger.info(f"Processing BUDGET intent: N{budget}")
         foods = get_foods_by_budget(budget)
@@ -655,10 +602,8 @@ def handle_user_input(user_input, user_name=None, conversation_history=None, tim
             prompt = f"User has ₦{budget} but no food options are available within their budget. Respond with empathy and humor."
             result = call_llm(
                 prompt,
-                user_name=user_name,
                 additional_context=context,
                 conversation_history=conversation_history,
-                time_of_day=time_of_day,
                 chat_style=chat_style,
             )
             logger.info("Low budget response generated")
@@ -680,10 +625,8 @@ def handle_user_input(user_input, user_name=None, conversation_history=None, tim
             
             result = call_llm(
                 prompt,
-                user_name=user_name,
                 additional_context=context,
                 conversation_history=conversation_history,
-                time_of_day=time_of_day,
                 chat_style=chat_style,
             )
             logger.info("Food recommendation generated")
@@ -709,10 +652,8 @@ def handle_user_input(user_input, user_name=None, conversation_history=None, tim
             prompt = f"User has these ingredients: {', '.join(ingredients)}. No exact matches found. Suggest ONE creative meal idea they can make. Keep it SHORT (2-3 sentences)."
             result = call_llm(
                 prompt,
-                user_name=user_name,
                 additional_context=context,
                 conversation_history=conversation_history,
-                time_of_day=time_of_day,
                 chat_style=chat_style,
             )
             logger.info("Creative meal suggestions generated")
@@ -734,10 +675,8 @@ def handle_user_input(user_input, user_name=None, conversation_history=None, tim
             
             result = call_llm(
                 prompt,
-                user_name=user_name,
                 additional_context=context,
                 conversation_history=conversation_history,
-                time_of_day=time_of_day,
                 chat_style=chat_style,
             )
             logger.info("Ingredient-based recommendation generated")

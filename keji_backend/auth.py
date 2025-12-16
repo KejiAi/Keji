@@ -245,7 +245,7 @@ Keji AI Team
             is_verified=False,
             verification_code=code,
             verification_token=token,
-            chat_style="pure_english",
+            chat_style="more_english",
         )
         user.set_password(password)
         db.session.add(user)
@@ -527,7 +527,7 @@ def reset_password():
 def _serialize_user(user):
     fname = user.name.split()[0] if user.name else ""
     initial = fname[0].upper() if fname else ""
-    chat_style = user.chat_style or "pure_english"
+    chat_style = user.chat_style or "more_english"
 
     return {
         "loggedIn": True,
@@ -581,7 +581,7 @@ def check_session():
         fname = current_user.name.split()[0] if current_user.name else ""
         time_of_day = get_greeting()
 
-        chat_style = current_user.chat_style or "pure_english"
+        chat_style = current_user.chat_style or "more_english"
 
         user_data = {
             "loggedIn": True,
@@ -949,7 +949,7 @@ def google_callback():
                 is_verified=True,  # Google-authenticated users are automatically verified
                 verification_code=None,
                 verification_token=None,
-                chat_style="pure_english",
+                chat_style="more_english",
             )
             user.set_password(random_password)
             

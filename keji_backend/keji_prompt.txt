@@ -15,7 +15,10 @@ RESPONSE FORMAT (ALWAYS USE THIS):
 }
 
 LANGUAGE STYLE:
-You will receive a "chat_style" - follow it STRICTLY:
+You will receive a "chat_style" - follow it STRICTLY for THIS response:
+- Ignore conversation history language - user may have changed preference
+- ONLY use the current chat_style provided
+
 - pure_english: Clear English only. No pidgin at all.
 - more_english: Mostly English, at most one subtle pidgin word.
 - pure_pidgin: Full Nigerian pidgin throughout.

@@ -21,11 +21,14 @@ const Start = () => {
   const [isLogin, setIsLogin] = useState(searchParams.get("mode") === "login"); // false = signup, true = login
   const [showPassword, setShowPassword] = useState(false);
   const [forgotPasswordSuccess, setForgotPasswordSuccess] = useState(false);
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [isForgotPasswordLoading, setIsForgotPasswordLoading] = useState(false);
   const { login } = useSession();
   const { toast } = useToast();
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    setIsSubmitting(true);
     const form = e.target as HTMLFormElement;
     const formData = new FormData(form);
     const data = {
@@ -70,6 +73,8 @@ const Start = () => {
     } catch (err) {
       console.error("Network error:", err);
       navigate("/error", { state: { message: "Something went wrong. Try again later." } });
+    } finally {
+      setIsSubmitting(false);
     }
   };
 
@@ -85,6 +90,8 @@ const Start = () => {
       });
       return;
     }
+    
+    setIsForgotPasswordLoading(true);
 
     try {
       const res = await fetch(`${getBackendUrl()}/forgot-password`, {
@@ -120,6 +127,8 @@ const Start = () => {
         description: "Something went wrong. Please try again later.",
         variant: "destructive",
       });
+    } finally {
+      setIsForgotPasswordLoading(false);
     }
   };
 
@@ -216,9 +225,10 @@ const Start = () => {
                     <button
                       type="button"
                       onClick={handleForgotPassword}
-                      className="text-sm text-brand hover:underline font-medium transition-colors"
+                      disabled={isForgotPasswordLoading}
+                      className="text-sm text-brand hover:underline font-medium transition-colors disabled:opacity-50"
                     >
-                      Forgot Password? 🔒
+                      {isForgotPasswordLoading ? "Sending..." : "Forgot Password? 🔒"}
                     </button>
                   </div>
                 )}
@@ -231,8 +241,9 @@ const Start = () => {
                   className="w-42 rounded-3xl mt-6"
                   aria-label={isLogin ? "Log in" : "Sign up"}
                   type="submit"
+                  loading={isSubmitting}
                 >
-                  {isLogin ? "Log in" : "Sign up"}
+                  {isSubmitting ? (isLogin ? "Logging in..." : "Signing up...") : (isLogin ? "Log in" : "Sign up")}
                 </Button>
               </div>
             </form>

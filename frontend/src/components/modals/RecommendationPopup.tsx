@@ -9,9 +9,10 @@ interface RecommendationPopupProps {
   } | null;
   onClose: () => void;
   onAccept: (acceptanceMessage: string) => void;
+  onReject: () => void;
 }
 
-const RecommendationPopup = ({ recommendation, onClose, onAccept }: RecommendationPopupProps) => {
+const RecommendationPopup = ({ recommendation, onClose, onAccept, onReject }: RecommendationPopupProps) => {
   const [showHealthModal, setShowHealthModal] = useState(false);
   const [isHealthModalVisible, setIsHealthModalVisible] = useState(false);
   
@@ -75,7 +76,7 @@ const RecommendationPopup = ({ recommendation, onClose, onAccept }: Recommendati
               <div className="flex gap-3">
                 <Button
                   variant="outline"
-                  onClick={onClose}
+                  onClick={onReject}
                   disabled={showHealthModal}
                   className="bg-black text-white hover:bg-gray-800 border-black rounded-full px-5 h-10 text-xl font-light disabled:opacity-50 disabled:cursor-not-allowed"
                 >

@@ -10,7 +10,7 @@ import re
 import uuid
 from datetime import datetime
 from werkzeug.utils import secure_filename
-from get_response import handle_user_input
+from get_response import handle_user_input, handle_rejected_recommendation
 from context_manager import (
     process_conversation_context,
     get_full_history_for_frontend
@@ -310,7 +310,7 @@ def chat():
         
         # 5. Determine context info
         send_time, send_name, time_of_day = should_send_context_info(history)
-        chat_style = getattr(current_user, "chat_style", "pure_english") or "pure_english"
+        chat_style = getattr(current_user, "chat_style", "more_english") or "more_english"
         
         # 6. Call AI
         logger.info("Processing with AI...")
@@ -480,6 +480,100 @@ def accept_recommendation():
         logger.error(f"Database error saving recommendation: {str(e)}", exc_info=True)
         db.session.rollback()
         return jsonify({"status": "error", "message": "Failed to save recommendation"}), 500
+
+
+@chat_bp.route("/reject_recommendation", methods=["POST"])
+@login_required
+def reject_recommendation():
+    """
+    Handle when user rejects a recommendation (clicks 'No').
+    Bypasses classification and directly calls for a new recommendation.
+    Does NOT save rejected recommendations to database.
+    Tracks all rejected titles to avoid recommending them again.
+    
+    Expected request body:
+    {
+        "title": "Rejected Food Title",
+        "recommendation_context": {
+            "context_type": "budget" | "ingredient",
+            "budget": 500,              // if budget-based
+            "ingredients": ["rice"],    // if ingredient-based
+            "rejected_titles": ["Rice and Beans", "Jollof Rice"]  // previously rejected
+        }
+    }
+    """
+    try:
+        data = request.get_json()
+        
+        # Validate data
+        if not data or not isinstance(data, dict):
+            return jsonify({"error": "Invalid data"}), 400
+        
+        rejected_title = data.get("title")
+        recommendation_context = data.get("recommendation_context", {})
+        
+        if not rejected_title:
+            return jsonify({"error": "Missing rejected title"}), 400
+        
+        # Extract context
+        context_type = recommendation_context.get("context_type")
+        budget = recommendation_context.get("budget")
+        ingredients = recommendation_context.get("ingredients")
+        rejected_titles = recommendation_context.get("rejected_titles", [])
+        
+        logger.info(f"Rejecting recommendation: {rejected_title} (User: {current_user.name})")
+        logger.info(f"   Context type: {context_type}, budget: {budget}, ingredients: {ingredients}")
+        logger.info(f"   Previously rejected: {rejected_titles}")
+
+    except Exception as e:
+        logger.error(f"Error validating rejection data: {str(e)}", exc_info=True)
+        return jsonify({"error": "Invalid request"}), 400
+
+    try:
+        # Find latest conversation for context
+        conversation = Conversation.query.filter_by(user_id=current_user.id)\
+            .order_by(Conversation.id.desc()).first()
+        
+        if not conversation:
+            logger.warning("No conversation found")
+            return jsonify({"error": "No conversation found"}), 404
+
+        # Get conversation history for context
+        from context_manager import process_conversation_context
+        filtered_history, _ = process_conversation_context(
+            conversation,
+            f"User rejected: {rejected_title}",
+            db.session
+        )
+        
+        # Get chat style
+        chat_style = getattr(current_user, "chat_style", "more_english") or "more_english"
+        
+        # Call rejection handler (bypasses classification, directly gets new recommendation)
+        # NOTE: We do NOT save the rejected recommendation to DB
+        # Pass rejected_titles so AI knows what to avoid
+        new_recommendation = handle_rejected_recommendation(
+            rejected_title=rejected_title,
+            budget=budget,
+            ingredients=ingredients,
+            conversation_history=filtered_history,
+            chat_style=chat_style,
+            rejected_titles=rejected_titles,
+        )
+        
+        logger.info(f"New recommendation generated: {new_recommendation.get('title', 'N/A')}")
+        
+        # Return new recommendation (not saved to DB - only saved when accepted)
+        # Response includes updated rejected_titles list for future rejections
+        return jsonify(new_recommendation), 200
+        
+    except Exception as e:
+        logger.error(f"Error generating new recommendation: {str(e)}", exc_info=True)
+        return jsonify({
+            "type": "chat",
+            "role": "assistant",
+            "content": "Omo, I no fit find another option right now. Abeg try again?"
+        }), 200
 
 
 

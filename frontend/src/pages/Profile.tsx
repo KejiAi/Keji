@@ -26,6 +26,7 @@ const Profile = () => {
   const [isEditingName, setIsEditingName] = useState(false);
   const [nameInput, setNameInput] = useState(user?.name || "");
   const [isSavingName, setIsSavingName] = useState(false);
+  const [isLoggingOut, setIsLoggingOut] = useState(false);
   const [isChatStyleModalOpen, setIsChatStyleModalOpen] = useState(false);
   const [chatStyle, setChatStyle] = useState(user?.chat_style || "pure_english");
 
@@ -38,7 +39,12 @@ const Profile = () => {
   }, [user?.chat_style]);
 
   const handleLogout = async () => {
-    await logout();
+    setIsLoggingOut(true);
+    try {
+      await logout();
+    } finally {
+      setIsLoggingOut(false);
+    }
   };
 
   const settingsItems = [
@@ -49,9 +55,9 @@ const Profile = () => {
 
 
   const applicationItems = [
-    { icon: "assets/All Icon Used/Vector.png", label: "About Application", onClick: () => {} },
-    { icon: "assets/All Icon Used/hugeicons_agreement-03.png", label: "Terms & Conditions", onClick: () => {} },
-    { icon: "assets/All Icon Used/basil_logout-outline.png", label: "Logout", onClick: handleLogout },
+    { icon: "assets/All Icon Used/Vector.png", label: "About Application", onClick: () => {}, loading: false },
+    { icon: "assets/All Icon Used/hugeicons_agreement-03.png", label: "Terms & Conditions", onClick: () => {}, loading: false },
+    { icon: "assets/All Icon Used/basil_logout-outline.png", label: "Logout", onClick: handleLogout, loading: isLoggingOut },
   ];
 
   const handleNameSave = async () => {
@@ -249,9 +255,11 @@ const Profile = () => {
                   variant="ghost"
                   className="w-full justify-start text-left p-3 h-auto rounded-md bg-background shadow-sm border"
                   onClick={item.onClick}
+                  loading={item.loading}
+                  disabled={item.loading}
                 >
                   <img src={item.icon} alt={item.label} className="h-5 w-5 mr-1 object-contain" />
-                  <span className="text-xl font-semibold">{item.label}</span>
+                  <span className="text-xl font-semibold">{item.loading ? "Logging out..." : item.label}</span>
                 </Button>
               ))}
             </div>

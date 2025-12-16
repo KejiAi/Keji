@@ -667,7 +667,7 @@ def handle_send_message(data):
         
         # 5. Determine context info
         send_time, send_name, time_of_day = should_send_context_info(history)
-        chat_style = getattr(current_user, "chat_style", "pure_english") or "pure_english"
+        chat_style = getattr(current_user, "chat_style", "more_english") or "more_english"
         
         # 6. Call AI
         logger.info("Processing with AI...")

@@ -137,7 +137,8 @@ const ResetPassword = () => {
             <Button
               type="submit"
               className="w-full"
-              disabled={loading || !token || !password || !confirmPassword}
+              disabled={!token || !password || !confirmPassword}
+              loading={loading}
             >
               {loading ? "Resetting..." : "Reset Password"}
             </Button>

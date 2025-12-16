@@ -105,7 +105,7 @@ const ChatStyleModal = ({ isOpen, onClose, currentStyle = "pure_english", onStyl
         <div className="flex gap-3 mt-4">
           <Button
             onClick={handleSave}
-            disabled={isSaving}
+            loading={isSaving}
             className="flex-1 bg-budget-red hover:bg-budget-red/90"
           >
             {isSaving ? "Saving..." : "Save"}

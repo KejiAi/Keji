@@ -92,10 +92,18 @@ interface BackendResponse {
   reply?: string; // For backward compatibility
 }
 
+interface RecommendationContext {
+  context_type?: "budget" | "ingredient";
+  budget?: number;
+  ingredients?: string[];
+  rejected_titles?: string[];
+}
+
 interface Recommendation {
   title: string;
   content: string;
   health?: Array<{ label: string; description: string }>;
+  recommendation_context?: RecommendationContext;
 }
 
 const Chat = () => {
@@ -312,7 +320,8 @@ const Chat = () => {
               setRecommendation({
                 title: parsed.title,
                 content: parsed.content,
-                health: parsed.health
+                health: parsed.health,
+                recommendation_context: parsed.recommendation_context,
               });
               setLoading(false);
               if (loadingTimerRef.current) {
@@ -371,7 +380,8 @@ const Chat = () => {
       setRecommendation({
         title: data.title || "Food Recommendation",
         content: data.content || "Here's a food suggestion for you.",
-        health: data.health
+        health: data.health,
+        recommendation_context: data.recommendation_context,
       });
       setLoading(false);
       // Clear loading timer
@@ -902,6 +912,71 @@ const Chat = () => {
     setRecommendation(null);
   };
 
+  const handleRecommendationReject = async () => {
+    if (!recommendation) return;
+    
+    console.log('❌ Rejecting recommendation:', recommendation.title);
+    
+    // Show loading animation while fetching new recommendation
+    setLoading(true);
+    setLoadingMessage("Keji is thinking");
+    
+    // Store context before clearing
+    const rejectedTitle = recommendation.title;
+    const context = recommendation.recommendation_context || {};
+    
+    // Clear current recommendation (will show new one when it arrives)
+    setRecommendation(null);
+    
+    try {
+      const response = await fetch(`${getBackendUrl()}/reject_recommendation`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        credentials: 'include',
+        body: JSON.stringify({
+          title: rejectedTitle,
+          recommendation_context: context,
+        }),
+      });
+      
+      if (!response.ok) {
+        throw new Error('Failed to get new recommendation');
+      }
+      
+      const newRecommendation = await response.json();
+      console.log('📌 Received new recommendation after rejection:', newRecommendation);
+      
+      if (newRecommendation.type === 'recommendation' && newRecommendation.title) {
+        setRecommendation({
+          title: newRecommendation.title,
+          content: newRecommendation.content,
+          health: newRecommendation.health,
+          recommendation_context: newRecommendation.recommendation_context,
+        });
+      } else if (newRecommendation.type === 'chat') {
+        // If no more recommendations available, show chat message
+        const aiMessage: Message = {
+          id: Date.now().toString(),
+          text: newRecommendation.content || "No more options available for your budget.",
+          sender: "ai",
+          timestamp: new Date(),
+        };
+        setMessages((prev) => [...prev, aiMessage]);
+      }
+    } catch (error) {
+      console.error('Error rejecting recommendation:', error);
+      toast({
+        title: "Error",
+        description: "Failed to get new recommendation. Please try again.",
+        variant: "destructive",
+      });
+    } finally {
+      setLoading(false);
+    }
+  };
+
   const handleRecommendationAccept = (acceptanceMessage: string) => {
     // Save the recommendation via WebSocket
     if (recommendation) {
@@ -1362,6 +1437,7 @@ const Chat = () => {
             recommendation={recommendation}
             onClose={handleRecommendationClose}
             onAccept={handleRecommendationAccept}
+            onReject={handleRecommendationReject}
           />
         )}
 

@@ -519,6 +519,115 @@ def get_foods_by_budget(budget):
         logger.debug("-"*60 + "\n")
         return []
 
+def handle_rejected_recommendation(
+    rejected_title,
+    budget=None,
+    ingredients=None,
+    conversation_history=None,
+    chat_style=None,
+    rejected_titles=None,
+):
+    """
+    Handle when user rejects a recommendation.
+    Bypasses classification and directly calls call_llm for a new recommendation.
+    
+    Args:
+        rejected_title: The title of the rejected recommendation
+        budget: User's budget (if budget-based recommendation)
+        ingredients: User's ingredients (if ingredient-based recommendation)
+        conversation_history: Last 20 messages for context
+        chat_style: Language style preference
+        rejected_titles: List of previously rejected titles to avoid
+    
+    Returns:
+        dict: New recommendation response with updated rejected_titles list
+    """
+    # Build cumulative list of all rejected titles
+    all_rejected = list(rejected_titles) if rejected_titles else []
+    if rejected_title and rejected_title not in all_rejected:
+        all_rejected.append(rejected_title)
+    
+    if not IS_PRODUCTION:
+        logger.info("Non-production: returning dummy alternative recommendation")
+        result = {
+            "type": "recommendation",
+            "role": "assistant",
+            "title": "Beans and Plantain",
+            "content": "Dev mode: Alternative recommendation",
+            "health": [{"label": "Energy", "description": "Dev mode response"}]
+        }
+        # Add context for potential further rejections (with rejected_titles)
+        if budget:
+            result["recommendation_context"] = {"context_type": "budget", "budget": budget, "rejected_titles": all_rejected}
+        elif ingredients:
+            result["recommendation_context"] = {"context_type": "ingredient", "ingredients": ingredients, "rejected_titles": all_rejected}
+        return result
+
+    logger.info("=" * 60)
+    logger.info(f"REJECTION HANDLER: User rejected '{rejected_title}'")
+    logger.info(f"   All rejected so far: {all_rejected}")
+    logger.info("=" * 60)
+    
+    # Get available foods based on context
+    foods = []
+    context = {}
+    context_type = None
+    
+    # Build rejection instruction for prompt
+    rejection_instruction = ""
+    if all_rejected:
+        rejection_instruction = f" Do NOT recommend any of these: {', '.join(all_rejected)}."
+    
+    if budget:
+        context_type = "budget"
+        foods = get_foods_by_budget(budget)
+        context["budget"] = budget
+        context["rejected_titles"] = all_rejected
+        context["note"] = f"User rejected these meals: {all_rejected}. Suggest a DIFFERENT meal from the {len(foods)} available options."
+        prompt = f"User has N{budget} budget.{rejection_instruction} Pick a DIFFERENT option and recommend it. Keep content SHORT (2-3 sentences max). Include health benefits."
+    elif ingredients:
+        context_type = "ingredient"
+        foods = get_meals_by_ingredients(ingredients)
+        context["ingredients"] = ingredients
+        context["rejected_titles"] = all_rejected
+        context["note"] = f"User rejected these meals: {all_rejected}. Suggest a DIFFERENT meal using these ingredients."
+        prompt = f"User has these ingredients: {', '.join(ingredients)}.{rejection_instruction} Pick a DIFFERENT meal and recommend it. Keep content SHORT (2-3 sentences max). Include health benefits."
+    else:
+        # Fallback - use conversation history to determine context
+        context["rejected_titles"] = all_rejected
+        context["note"] = f"User rejected these meals: {all_rejected}. Suggest something different."
+        prompt = f"Suggest a DIFFERENT meal option.{rejection_instruction} Keep content SHORT (2-3 sentences max). Include health benefits."
+    
+    if foods:
+        context["available_foods"] = foods
+    
+    if chat_style:
+        context["chat_style"] = chat_style
+    
+    logger.info(f"   Available alternatives: {len(foods)}")
+    logger.info(f"   Rejected titles to avoid: {all_rejected}")
+    logger.info(f"   Calling call_llm for new recommendation...")
+    
+    result = call_llm(
+        prompt,
+        additional_context=context,
+        conversation_history=conversation_history,
+        chat_style=chat_style,
+    )
+    
+    # Add recommendation context for potential further rejections (including all rejected titles)
+    if result.get("type") == "recommendation":
+        if context_type == "budget":
+            result["recommendation_context"] = {"context_type": "budget", "budget": budget, "rejected_titles": all_rejected}
+        elif context_type == "ingredient":
+            result["recommendation_context"] = {"context_type": "ingredient", "ingredients": ingredients, "rejected_titles": all_rejected}
+        else:
+            result["recommendation_context"] = {"rejected_titles": all_rejected}
+    
+    logger.info(f"   New recommendation: {result.get('title', 'N/A')}")
+    return result
+
+
 def get_meals_by_ingredients(ingredients):
     logger.debug("\n" + "-"*60)
     logger.debug(f"Searching meals with ingredients: {', '.join(ingredients)}")
@@ -632,6 +741,15 @@ def handle_user_input(user_input, user_name=None, conversation_history=None, tim
                 conversation_history=conversation_history,
                 chat_style=chat_style,
             )
+            
+            # Add recommendation context for rejection handling (with empty rejected_titles)
+            if result.get("type") == "recommendation":
+                result["recommendation_context"] = {
+                    "context_type": "budget",
+                    "budget": budget,
+                    "rejected_titles": []
+                }
+            
             logger.info("Food recommendation generated")
             return result
 
@@ -682,6 +800,15 @@ def handle_user_input(user_input, user_name=None, conversation_history=None, tim
                 conversation_history=conversation_history,
                 chat_style=chat_style,
             )
+            
+            # Add recommendation context for rejection handling (with empty rejected_titles)
+            if result.get("type") == "recommendation":
+                result["recommendation_context"] = {
+                    "context_type": "ingredient",
+                    "ingredients": ingredients,
+                    "rejected_titles": []
+                }
+            
             logger.info("Ingredient-based recommendation generated")
             return result
 

@@ -20,6 +20,7 @@ const EmailVerification = () => {
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [verificationCode, setVerificationCode] = useState("");
   const [isVerifying, setIsVerifying] = useState(false);
+  const [isResending, setIsResending] = useState(false);
   const [resendCountdown, setResendCountdown] = useState(0);
   const [canResend, setCanResend] = useState(true);
 
@@ -101,20 +102,25 @@ const EmailVerification = () => {
 
   // Placeholder function for resending verification code
   const handleResendCode = async () => {
-    if (!canResend) return;
+    if (!canResend || isResending) return;
 
-    const res = await fetch(`${getBackendUrl()}/verify-email/resend`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ email }),
-    });
+    setIsResending(true);
+    try {
+      const res = await fetch(`${getBackendUrl()}/verify-email/resend`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email }),
+      });
 
-    if (res.ok) {
-      toast({ title: "Code Resent", description: "A new verification code has been sent." });
-      setCanResend(false);
-      setResendCountdown(60);
-    } else {
-      toast({ title: "Error", description: "Could not resend code.", variant: "destructive" });
+      if (res.ok) {
+        toast({ title: "Code Resent", description: "A new verification code has been sent." });
+        setCanResend(false);
+        setResendCountdown(60);
+      } else {
+        toast({ title: "Error", description: "Could not resend code.", variant: "destructive" });
+      }
+    } finally {
+      setIsResending(false);
     }
   };
 
@@ -181,7 +187,8 @@ const EmailVerification = () => {
                     <div className="space-y-3">
                       <Button
                         onClick={() => handleCodeVerification(verificationCode)}
-                        disabled={verificationCode.length < 6 || isVerifying}
+                        disabled={verificationCode.length < 6}
+                        loading={isVerifying}
                         className="w-full"
                       >
                         {isVerifying ? "Verifying..." : "Verify Code"}
@@ -190,10 +197,13 @@ const EmailVerification = () => {
                       <Button
                         variant="outline"
                         onClick={handleResendCode}
-                        disabled={!canResend}
+                        disabled={!canResend || isResending}
+                        loading={isResending}
                         className="w-full"
                       >
-                        {!canResend ? (
+                        {isResending ? (
+                          "Sending..."
+                        ) : !canResend ? (
                           <span className="flex items-center gap-2">
                             <Clock className="w-4 h-4" />
                             Resend in {resendCountdown}s

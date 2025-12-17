@@ -79,7 +79,7 @@ const InputVerification = React.forwardRef<
   return (
     <div
       ref={ref}
-      className={cn("flex gap-2", className)}
+      className={cn("flex gap-1.5 sm:gap-2 justify-center", className)}
       {...props}
     >
       {Array.from({ length }, (_, index) => (
@@ -95,8 +95,8 @@ const InputVerification = React.forwardRef<
           onPaste={handlePaste}
           disabled={disabled}
           className={cn(
-            "h-12 w-12 text-center text-lg font-semibold",
-            "rounded-xl border border-input",
+            "h-10 w-10 sm:h-12 sm:w-12 text-center text-base sm:text-lg font-semibold",
+            "rounded-lg sm:rounded-xl border border-input",
             "bg-background text-foreground",
             "focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent",
             "disabled:cursor-not-allowed disabled:opacity-50",

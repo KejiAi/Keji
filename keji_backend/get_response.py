@@ -125,7 +125,7 @@ def classify_llm(prompt, conversation_history=None, user_name=None, time_of_day=
         try:
             client = _get_openai_client()
             response = client.chat.completions.create(
-                model="gpt-4o-mini",
+                model="gpt-5-mini",  # GPT-5 mini for classification
                 messages=messages
             )
             if response and hasattr(response, 'choices') and response.choices:
@@ -276,9 +276,9 @@ def call_llm(
         """Run in real thread with fresh OpenAI client - extract all data before returning"""
         try:
             client = _get_openai_client()
-            # Use gpt-4o for main chat (upgraded version, supports both text and vision)
+            # Use gpt-5.2 for main chat (best for coding and agentic tasks)
             # gpt-4o-mini is used for summarization and classification (smaller tasks)
-            model = MODEL_FOR_CHAT  # gpt-4o - upgraded version for main chat
+            model = MODEL_FOR_CHAT  # gpt-5.2 - main chat model
             logger.info(f"📤 Calling OpenAI API with model: {model}, {len(messages)} messages")
             if has_images:
                 logger.info(f"   Vision request with images")

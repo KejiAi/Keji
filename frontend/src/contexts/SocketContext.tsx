@@ -24,6 +24,12 @@ interface SocketRecommendation {
   title: string;
   content: string;
   health?: Array<{ label: string; description: string }>;
+  recommendation_context?: {
+    context_type?: "budget" | "ingredient";
+    budget?: number;
+    ingredients?: string[];
+    rejected_titles?: string[];
+  };
 }
 
 interface SocketChunk {

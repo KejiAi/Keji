@@ -14,6 +14,7 @@ import ResetPassword from "./pages/ResetPassword";
 import Homepage from "./pages/Homepage";
 import Chat from "./pages/Chat";
 import Profile from "./pages/Profile";
+import Feedback from "./pages/Feedback";
 import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient();
@@ -35,6 +36,7 @@ const App = () => (
                 <Route path="/homepage" element={<ProtectedRoute><Homepage /></ProtectedRoute>} />
                 <Route path="/chat" element={<ProtectedRoute><Chat /></ProtectedRoute>} />
                 <Route path="/profile" element={<ProtectedRoute><Profile /></ProtectedRoute>} />
+                <Route path="/feedback" element={<ProtectedRoute><Feedback /></ProtectedRoute>} />
                 <Route path="/error" element={<NotFound />} />
                 <Route path="*" element={<NotFound />} />
               </Routes>

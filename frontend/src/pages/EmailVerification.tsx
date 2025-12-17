@@ -128,7 +128,7 @@ const EmailVerification = () => {
   return (
     <PageContainer Logo={<Logo />} variant="compact">
       <SEO
-        title="Verify Your Email — Keji AI"
+        title="Verify Your Email - Keji AI"
         description="Verify your email address to complete your account setup."
       />
       
@@ -165,16 +165,16 @@ const EmailVerification = () => {
                     Enter Code Manually
                   </Button>
                 </DialogTrigger>
-                <DialogContent className="sm:max-w-md">
-                  <DialogHeader className="text-center">
-                    <DialogTitle className="text-2xl font-bold">Enter Verification Code</DialogTitle>
-                    <DialogDescription>
+                <DialogContent className="max-w-[calc(100vw-2rem)] sm:max-w-md mx-auto px-4 sm:px-6">
+                  <DialogHeader className="text-center mt-6 sm:mt-8">
+                    <DialogTitle className="text-xl sm:text-2xl font-bold text-center">Enter Verification Code</DialogTitle>
+                    <DialogDescription className="text-sm sm:text-base text-center">
                       Enter the 6-digit code sent to {email}
                     </DialogDescription>
                   </DialogHeader>
                   
-                  <div className="space-y-6">
-                    <div className="flex justify-center">
+                  <div className="space-y-4 sm:space-y-6">
+                    <div className="flex justify-center w-full overflow-hidden py-4 sm:py-6">
                       <InputVerification
                         length={6}
                         value={verificationCode}
@@ -189,7 +189,7 @@ const EmailVerification = () => {
                         onClick={() => handleCodeVerification(verificationCode)}
                         disabled={verificationCode.length < 6}
                         loading={isVerifying}
-                        className="w-full"
+                        className="w-full"                       
                       >
                         {isVerifying ? "Verifying..." : "Verify Code"}
                       </Button>

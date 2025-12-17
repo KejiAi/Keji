@@ -222,6 +222,12 @@ const Homepage = () => {
                     Report
                   </button> */}
                   <button
+                    onClick={() => navigate("/feedback")}
+                    className="block w-full px-4 py-2 text-sm text-left hover:bg-gray-100"
+                  >
+                    Feedback
+                  </button>
+                  <button
                     onClick={handleLogout}
                     disabled={isLoggingOut}
                     className="block w-full px-4 py-2 text-sm text-left hover:bg-gray-100 text-red-600 disabled:opacity-50 disabled:cursor-not-allowed"

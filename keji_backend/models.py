@@ -67,3 +67,14 @@ class MessageAttachment(db.Model):
     content_type = db.Column(db.String(120), nullable=True)
     size_bytes = db.Column(db.Integer, nullable=True)
     created_at = db.Column(db.DateTime, default=datetime.now())
+
+
+class Feedback(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    user_id = db.Column(db.Integer, db.ForeignKey("user.id"), nullable=False, index=True)
+    rating = db.Column(db.Integer, nullable=False)  # 1-5 stars
+    comment = db.Column(db.Text, nullable=True)
+    created_at = db.Column(db.DateTime, default=datetime.now())
+    
+    # Relationship to user
+    user = db.relationship("User", backref=db.backref("feedbacks", lazy=True))

@@ -1,7 +1,7 @@
 from flask import Blueprint, request, jsonify, session, make_response, redirect, current_app, url_for
 from extensions import db
 import string
-from models import User
+from models import User, Feedback
 from flask_login import login_user, logout_user, login_required, current_user
 import logging
 import random
@@ -968,3 +968,45 @@ def google_callback():
     except Exception as e:
         logger.error(f"Error in Google OAuth callback: {str(e)}", exc_info=True)
         return redirect(f"{os.getenv('FRONTEND_BASE_URL')}/start?error=auth_failed")
+
+
+@auth_bp.route("/feedback", methods=["POST"])
+@login_required
+def submit_feedback():
+    """
+    Submit user feedback with rating and optional comment.
+    """
+    try:
+        data = request.get_json()
+        
+        if not data:
+            return jsonify({"error": "No data provided"}), 400
+        
+        rating = data.get("rating")
+        comment = data.get("comment", "").strip()
+        
+        # Validate rating
+        if not rating or not isinstance(rating, int) or rating < 1 or rating > 5:
+            return jsonify({"error": "Rating must be between 1 and 5"}), 400
+        
+        # Create feedback entry
+        feedback = Feedback(
+            user_id=current_user.id,
+            rating=rating,
+            comment=comment if comment else None
+        )
+        
+        db.session.add(feedback)
+        db.session.commit()
+        
+        logger.info(f"Feedback submitted by {current_user.name} (ID: {current_user.id}): {rating} stars")
+        
+        return jsonify({
+            "status": "success",
+            "message": "Feedback submitted successfully"
+        }), 200
+        
+    except Exception as e:
+        logger.error(f"Error submitting feedback: {str(e)}", exc_info=True)
+        db.session.rollback()
+        return jsonify({"error": "Failed to submit feedback"}), 500

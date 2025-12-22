@@ -6,6 +6,7 @@ from models import Conversation, Message, MessageAttachment
 
 
 MAX_ATTACHMENTS = 2
+pause_before_recommendation = 5
 
 from get_response import handle_user_input
 from context_manager import (
@@ -707,6 +708,104 @@ def handle_send_message(data):
                 except:
                     logger.error("Failed to parse bot_reply as JSON")
                     bot_reply = {"type": "chat", "role": "assistant", "content": str(bot_reply)}
+        
+        # Check for chat_and_recommendation type - send chat first, then recommendation
+        if isinstance(bot_reply, dict) and bot_reply.get("type") == "chat_and_recommendation":
+            chat_text = bot_reply.get("chat", "")
+            recommendation = bot_reply.get("recommendation", {})
+            
+            if chat_text and recommendation.get("title") and recommendation.get("content"):
+                logger.info(f"✅ Chat + Recommendation detected")
+                logger.info(f"   Chat: {chat_text[:100]}...")
+                logger.info(f"   Recommendation: {recommendation.get('title', 'N/A')}")
+                
+                # 1. Save and send chat message first (with chunking if long)
+                should_chunk_chat = len(chat_text) > 100
+                
+                if should_chunk_chat:
+                    chunks = split_into_chunks(chat_text, max_chunk_size=150)
+                    message_group_id = str(uuid.uuid4())
+                    logger.info(f"Chunking chat message: {len(chunks)} chunks")
+                    
+                    chunk_messages = []
+                    for i, chunk in enumerate(chunks):
+                        chunk_msg = Message(
+                            conversation_id=conversation.id,
+                            sender="bot",
+                            text=chunk,
+                            message_group_id=message_group_id,
+                            chunk_index=i,
+                            total_chunks=len(chunks)
+                        )
+                        db.session.add(chunk_msg)
+                        chunk_messages.append(chunk_msg)
+                    
+                    db.session.commit()
+                    
+                    for i, (chunk, chunk_msg) in enumerate(zip(chunks, chunk_messages)):
+                        if i > 0:
+                            base_delay = 0.8
+                            typing_speed = 40
+                            typing_time = len(chunk) / typing_speed
+                            delay = base_delay + typing_time
+                            time.sleep(delay)
+                        
+                        is_final = i == len(chunks) - 1
+                        chunk_data = {
+                            'type': 'chat_chunk',
+                            'role': 'assistant',
+                            'chunk': chunk,
+                            'chunk_index': i,
+                            'total_chunks': len(chunks),
+                            'is_final': is_final,
+                            'message_group_id': message_group_id,
+                            'message_id': chunk_msg.id,
+                            'timestamp': chunk_msg.timestamp.isoformat(),
+                            'recommendation_follows': is_final  # Tell frontend a recommendation is coming after final chunk
+                        }
+                        emit('receive_chunk', chunk_data)
+                else:
+                    # Short chat message
+                    chat_msg = Message(
+                        conversation_id=conversation.id,
+                        sender="bot",
+                        text=chat_text
+                    )
+                    db.session.add(chat_msg)
+                    db.session.commit()
+                    
+                    emit('receive_message', {
+                        'type': 'chat',
+                        'role': 'assistant',
+                        'content': chat_text,
+                        'message_id': chat_msg.id,
+                        'timestamp': chat_msg.timestamp.isoformat(),
+                        'recommendation_follows': True  # Tell frontend a recommendation is coming
+                    })
+                
+                # 2. Brief pause to show "Keji is thinking" animation before recommendation
+                time.sleep(pause_before_recommendation)
+                
+                # 3. Send recommendation (not saved to DB until accepted)
+                recommendation_data = {
+                    "type": "recommendation",
+                    "role": "assistant",
+                    "title": recommendation.get("title"),
+                    "content": recommendation.get("content"),
+                    "health": recommendation.get("health", [])
+                }
+                emit('receive_recommendation', recommendation_data)
+                logger.info("   Chat + Recommendation both sent successfully")
+                return  # Exit early
+            else:
+                logger.warning("Incomplete chat_and_recommendation, falling back")
+                # Fallback: if we have recommendation, use it; otherwise use chat
+                if recommendation.get("title") and recommendation.get("content"):
+                    bot_reply = {"type": "recommendation", "role": "assistant", **recommendation}
+                elif chat_text:
+                    bot_reply = {"type": "chat", "role": "assistant", "content": chat_text}
+                else:
+                    bot_reply = {"type": "chat", "role": "assistant", "content": "How can I help you?"}
         
         # Check for recommendation type - MUST be checked before any chunking logic
         if isinstance(bot_reply, dict) and bot_reply.get("type") == "recommendation":

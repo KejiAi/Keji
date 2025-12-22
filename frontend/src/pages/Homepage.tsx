@@ -1,18 +1,15 @@
 import PageContainer from "@/components/layout/PageContainer";
 import SEO from "@/components/common/SEO";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Textarea } from "@/components/ui/textarea";
 import { Avatar, AvatarImage, AvatarFallback } from "@/components/ui/avatar";
 import MealOptions from "@/components/sections/MealOptions";
+import ChatInputSection from "@/components/chat/ChatInputSection";
 import { useState, useEffect, useRef } from "react";
 import { useNavigate } from "react-router-dom";
 import { motion, AnimatePresence } from "framer-motion";
 import BudgetModal from "@/components/modals/BudgetModal";
 import IngredientModal from "@/components/modals/IngredientModal";
-import { getBackendUrl } from "@/lib/utils";
 import { useSession } from "@/contexts/SessionContext";
-import { useToast } from "@/hooks/use-toast";
 
 const frontendUrl = import.meta.env.VITE_FRONTEND_BASE_URL;
 
@@ -20,19 +17,14 @@ const frontendUrl = import.meta.env.VITE_FRONTEND_BASE_URL;
 const Homepage = () => {
   const navigate = useNavigate();
   const [message, setMessage] = useState("");
-  const [menuOpen, setMenuOpen] = useState(false); // 👈 track dropdown state
+  const [menuOpen, setMenuOpen] = useState(false);
   const [budgetModalOpen, setBudgetModalOpen] = useState(false);
   const [ingredientModalOpen, setIngredientModalOpen] = useState(false);
   const [selectedFiles, setSelectedFiles] = useState<File[]>([]);
   const [isLoggingOut, setIsLoggingOut] = useState(false);
   const { user, isLoading, logout } = useSession();
-  const { toast } = useToast();
 
-  const menuRef = useRef<HTMLDivElement | null>(null); // 👈 ref for menu wrapper
-  const fileInputRef = useRef<HTMLInputElement | null>(null);
-  const textareaRef = useRef<HTMLTextAreaElement>(null);
-  const [textareaHeight, setTextareaHeight] = useState(48); // Initial height in pixels
-  const [borderRadius, setBorderRadius] = useState(24); // Initial border radius
+  const menuRef = useRef<HTMLDivElement | null>(null);
 
   // 🔹 Close menu when clicking outside
   useEffect(() => {
@@ -49,53 +41,6 @@ const Homepage = () => {
     };
   }, [menuOpen]);
 
-  // Auto-resize textarea based on content
-  useEffect(() => {
-    const textarea = textareaRef.current;
-    if (!textarea) return;
-
-    const adjustHeight = () => {
-      textarea.style.height = "auto";
-      const scrollHeight = textarea.scrollHeight;
-      const lineHeight = 24; // Approximate line height
-      const minHeight = 48; // 2 lines
-      const maxHeight = 120; // 5 lines max before scrolling
-      
-      let lines = Math.floor(scrollHeight / lineHeight);
-      lines = Math.max(2, lines); // Minimum 2 lines
-      
-      let newHeight = minHeight;
-      let newBorderRadius = 24;
-      
-      if (lines <= 2) {
-        newHeight = minHeight;
-        newBorderRadius = 24;
-      } else if (lines === 3) {
-        newHeight = 72;
-        newBorderRadius = 18;
-      } else if (lines === 4) {
-        newHeight = 96;
-        newBorderRadius = 12;
-      } else {
-        newHeight = maxHeight;
-        newBorderRadius = 8;
-        textarea.style.overflowY = "auto";
-      }
-      
-      if (lines < 5) {
-        textarea.style.overflowY = "hidden";
-      }
-      
-      setTextareaHeight(newHeight);
-      setBorderRadius(newBorderRadius);
-      textarea.style.height = `${newHeight}px`;
-    };
-
-    adjustHeight();
-  }, [message]);
-
-  // No need for manual session fetching - handled by SessionContext
-
   const MAX_ATTACHMENTS = 2;
 
   const handleSendMessage = () => {
@@ -109,29 +54,6 @@ const Homepage = () => {
     navigate("/chat", { state: { message: trimmedMessage, files: filesToSend } });
     setMessage("");
     setSelectedFiles([]);
-  };
-
-  const handleFileSelect = () => {
-    fileInputRef.current?.click();
-  };
-
-  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    if (e.target.files) {
-      const newFiles = Array.from(e.target.files);
-      const combined = [...selectedFiles, ...newFiles];
-      if (combined.length > MAX_ATTACHMENTS) {
-        toast({
-          title: "Attachment limit reached",
-          description: `You can only attach up to ${MAX_ATTACHMENTS} files at a time.`,
-        });
-      }
-      setSelectedFiles(combined.slice(0, MAX_ATTACHMENTS));
-      e.target.value = ''; // Reset input
-    }
-  };
-
-  const removeFile = (index: number) => {
-    setSelectedFiles(prev => prev.filter((_, i) => i !== index));
   };
 
   const handleBudgetSubmit = (budgetMessage: string) => {
@@ -334,138 +256,15 @@ const Homepage = () => {
         <MealOptions className="pt-2" />
 
         {/* Chat input area */}
-        <div className="fixed bottom-0 left-0 right-0 bg-[#FFFBFB]" style={{ borderTopLeftRadius: '40px', borderTopRightRadius: '40px' }}>
-          <div className="w-full">
-            {/* File preview - displayed above */}
-            {selectedFiles.length > 0 && (
-              <div className="px-2 mx-4 mt-3">
-                <div className="flex flex-wrap gap-3">
-                  {selectedFiles.map((file, index) => {
-                    const isImage = file.type.startsWith('image/');
-                    const fileUrl = isImage ? URL.createObjectURL(file) : null;
-                    
-                    return (
-                      <div key={index} className="relative group">
-                        <div className="flex flex-col items-center gap-1 bg-muted p-2 rounded-lg">
-                          {isImage && fileUrl ? (
-                            <img 
-                              src={fileUrl} 
-                              alt={file.name}
-                              className="w-16 h-16 object-cover rounded"
-                              onLoad={() => URL.revokeObjectURL(fileUrl)}
-                            />
-                          ) : (
-                            <div className="w-16 h-16 bg-background flex items-center justify-center rounded">
-                              <svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-muted-foreground">
-                                <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
-                                <polyline points="14 2 14 8 20 8"></polyline>
-                              </svg>
-                            </div>
-                          )}
-                          <span className="text-xs truncate max-w-[64px] text-center">{file.name}</span>
-                        </div>
-                        <button
-                          onClick={() => removeFile(index)}
-                          className="absolute -top-0 -right-0 bg-white text-black text-2xl rounded-full w-6 h-6 flex items-center justify-center hover:opacity-80 transition-opacity"
-                        >
-                          ×
-                        </button>
-                      </div>
-                    );
-                  })}
-                </div>
-              </div>
-            )}
-            
-            {/* Chat input placeholder - displayed above */}
-            <div 
-              className="flex items-end p-2 flex-1 mx-4 mt-3 transition-all duration-200"
-              style={textareaHeight > 48 ? { 
-                borderRadius: `${borderRadius}px`,
-                minHeight: `${textareaHeight + 16}px`
-              } : { borderRadius: '24px' }}
-            > 
-              <Textarea
-                ref={textareaRef}
-                value={message}
-                onChange={(e) => setMessage(e.target.value)}
-                placeholder="E.g: I have ₦600, what can I eat"
-                className="flex-1 bg-transparent text-base placeholder:text-muted-foreground/70 placeholder:text-base px-2 py-3 resize-none min-h-[48px]"
-                onKeyDown={(e) => {
-                  // On mobile, Enter creates new line, Ctrl+Enter or Cmd+Enter sends message
-                  // On desktop, Enter sends message, Shift+Enter creates new line
-                  const isMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
-                  
-                  if (e.key === "Enter") {
-                    if (isMobile) {
-                      // On mobile: Enter = new line, Ctrl+Enter = send
-                      if (e.ctrlKey || e.metaKey) {
-                        e.preventDefault();
-                        handleSendMessage();
-                      }
-                      // Otherwise, let Enter create a new line naturally
-                    } else {
-                      // On desktop: Enter = send (unless Shift is held)
-                      if (!e.shiftKey) {
-                        e.preventDefault();
-                        handleSendMessage();
-                      }
-                      // Shift+Enter creates new line naturally
-                    }
-                  }
-                }}
-                rows={1}
-              />
-            </div>
-
-            {/* Buttons container - displayed below and centralized */}
-            <div className="flex items-center px-4 pb-4 pt-1 justify-between mb-2">
-              <button onClick={handleFileSelect} className="flex-shrink-0 mb-1">
-                  <img src="assets/All Icon Used/ic_round-plus2.png" alt="Upload Button" className="h-10 w-10 object-contain" />
-              </button>
-
-              <div className="flex items-center justify-center gap-[10px]">
-                <Button
-                  variant="ghost"
-                  size="icon"
-                  className="p-0 hover:opacity-80 transition"
-                >
-                  <img
-                    src="assets/All Icon Used/mic-HP.png"
-                    alt="mic"
-                    className="h-6 w-6 object-contain"
-                  />
-                  <span className="sr-only">Voice input</span>
-                </Button>
-
-                <Button
-                  variant="ghost"
-                  size="icon"
-                  className="h-[44px] w-[44px] rounded-full bg-black flex-shrink-0 p-0"
-                  onClick={handleSendMessage}
-                  disabled={!message.trim() && selectedFiles.length === 0}
-                >
-                  <img
-                    src="assets/All Icon Used/iconamoon_send-fill-HP.png"
-                    alt="Send"
-                    className="h-6 w-6 object-contain"
-                  />
-                  <span className="sr-only">Send message</span>
-                </Button>
-              </div>
-            </div>
-
-            {/* Hidden file input */}
-            <input
-              ref={fileInputRef}
-              type="file"
-              multiple
-              className="hidden"
-              onChange={handleFileChange}
-              accept=".jpg,.jpeg,.png,.pdf,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.txt"
-            />
-          </div>
-        </div>
+        <ChatInputSection
+          message={message}
+          onMessageChange={setMessage}
+          onSendMessage={handleSendMessage}
+          selectedFiles={selectedFiles}
+          onFilesChange={setSelectedFiles}
+          placeholder="E.g: I have ₦600, what can I eat"
+          isFixed={true}
+        />
 
         {/* Spacer so content doesn't hide behind the fixed bar */}
         <div className="h-28 md:h-0"></div>

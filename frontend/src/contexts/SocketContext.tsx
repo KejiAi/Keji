@@ -16,6 +16,7 @@ interface SocketMessage {
   upload_errors?: string[];
   user_message_id?: number;
   client_message_id?: string;
+  recommendation_follows?: boolean;  // Indicates a recommendation will follow this message
 }
 
 interface SocketRecommendation {
@@ -42,6 +43,7 @@ interface SocketChunk {
   message_group_id: string;
   message_id: number;
   timestamp: string;
+  recommendation_follows?: boolean;  // On final chunk, indicates a recommendation will follow
 }
 
 export interface SocketHistoryMessage {

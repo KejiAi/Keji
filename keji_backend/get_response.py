@@ -56,7 +56,7 @@ def _get_openai_client():
     """Create OpenAI client in thread context (fresh SSL, no eventlet patch)"""
     return OpenAI()
 
-def classify_llm(prompt, conversation_history=None, user_name=None, time_of_day=None, chat_style=None):
+def classify_llm(prompt, conversation_history=None, user_name=None, time_of_day=None, chat_style=None, image_base64_data=None):
     """
     Classify user intent AND respond directly for chat intents.
     Uses keji_chat_prompt.txt for classification + chat responses.
@@ -67,6 +67,7 @@ def classify_llm(prompt, conversation_history=None, user_name=None, time_of_day=
         user_name: Optional user's name for personalization
         time_of_day: Optional time period for greetings
         chat_style: Optional language style preference (pure_english, more_english, pure_pidgin)
+        image_base64_data: Optional list of dicts with 'base64' and 'mime_type' for vision API
     
     Returns:
         str: JSON result with classification (and response for chat type)
@@ -114,18 +115,37 @@ def classify_llm(prompt, conversation_history=None, user_name=None, time_of_day=
         for hist_msg in recent_history:
             messages.append(hist_msg)
     
-    # Add the classification prompt
-    messages.append({"role": "user", "content": prompt})
+    # Add the classification prompt (with images if present)
+    if image_base64_data and len(image_base64_data) > 0:
+        # Build content array with text and images for vision API
+        logger.info(f"   Including {len(image_base64_data)} image(s) for vision API")
+        user_content = [{"type": "text", "text": prompt}]
+        for img_data in image_base64_data:
+            base64_str = img_data.get("base64", "")
+            mime_type = img_data.get("mime_type", "image/jpeg")
+            data_uri = f"data:{mime_type};base64,{base64_str}"
+            user_content.append({
+                "type": "image_url",
+                "image_url": {"url": data_uri}
+            })
+        messages.append({"role": "user", "content": user_content})
+    else:
+        messages.append({"role": "user", "content": prompt})
     
     logger.info(f"   Total messages: {len(messages)}")
     logger.info(f"   Chat style: {chat_style or 'not set'}")
+    if image_base64_data:
+        logger.info(f"   Images: {len(image_base64_data)}")
+    
+    # Use vision-capable model when images are present
+    model = "gpt-5.2"
     
     def _call():
         """Run in real thread with fresh OpenAI client"""
         try:
             client = _get_openai_client()
             response = client.chat.completions.create(
-                model="gpt-5-mini",  # GPT-5 mini for classification
+                model=model,
                 messages=messages
             )
             if response and hasattr(response, 'choices') and response.choices:
@@ -387,6 +407,31 @@ def call_llm(
                         "role": "assistant",
                         "content": result
                     }
+            elif response_type == 'chat_and_recommendation':
+                # Validate chat_and_recommendation structure
+                recommendation = parsed.get('recommendation', {})
+                if "chat" in parsed and "title" in recommendation and "content" in recommendation:
+                    logger.info(f"Chat + Recommendation: {recommendation.get('title', 'N/A')}")
+                    logger.info(f"   Chat message: {parsed.get('chat', '')[:100]}...")
+                    return parsed
+                else:
+                    logger.warning("Incomplete chat_and_recommendation structure, using fallback")
+                    # Try to salvage what we can
+                    if recommendation.get('title') and recommendation.get('content'):
+                        # Has valid recommendation, return as recommendation only
+                        return {
+                            "type": "recommendation",
+                            "role": "assistant",
+                            "title": recommendation.get('title'),
+                            "content": recommendation.get('content'),
+                            "health": recommendation.get('health', [])
+                        }
+                    else:
+                        return {
+                            "type": "chat",
+                            "role": "assistant",
+                            "content": parsed.get('chat', result)
+                        }
             else:
                 # Validate chat structure
                 if "type" in parsed and "role" in parsed and "content" in parsed:
@@ -419,7 +464,7 @@ def call_llm(
         }
 
 
-def classify_intent(user_input, conversation_history=None, user_name=None, time_of_day=None, chat_style=None):
+def classify_intent(user_input, conversation_history=None, user_name=None, time_of_day=None, chat_style=None, image_base64_data=None):
     """
     Classify user intent AND get response for chat in a single LLM call.
     
@@ -429,6 +474,7 @@ def classify_intent(user_input, conversation_history=None, user_name=None, time_
         user_name: Optional user's name for personalization
         time_of_day: Optional time period for greetings
         chat_style: Optional language style preference
+        image_base64_data: Optional list of dicts with 'base64' and 'mime_type' for vision API
     
     Returns:
         dict: Classification result with intent type (and response for chat)
@@ -457,7 +503,8 @@ Answer (JSON only):"""
         conversation_history=conversation_history,
         user_name=user_name,
         time_of_day=time_of_day,
-        chat_style=chat_style
+        chat_style=chat_style,
+        image_base64_data=image_base64_data
     ).strip()
     
     # Strip markdown code blocks if present (OpenAI sometimes wraps JSON in ```json ... ```)
@@ -616,7 +663,8 @@ def handle_rejected_recommendation(
     )
     
     # Add recommendation context for potential further rejections (including all rejected titles)
-    if result.get("type") == "recommendation":
+    # This applies to both "recommendation" and "chat_and_recommendation" types
+    if result.get("type") in ("recommendation", "chat_and_recommendation"):
         if context_type == "budget":
             result["recommendation_context"] = {"context_type": "budget", "budget": budget, "rejected_titles": all_rejected}
         elif context_type == "ingredient":
@@ -624,7 +672,12 @@ def handle_rejected_recommendation(
         else:
             result["recommendation_context"] = {"rejected_titles": all_rejected}
     
-    logger.info(f"   New recommendation: {result.get('title', 'N/A')}")
+    # Log appropriately based on type
+    if result.get("type") == "chat_and_recommendation":
+        rec = result.get("recommendation", {})
+        logger.info(f"   Chat + Recommendation: {rec.get('title', 'N/A')}")
+    else:
+        logger.info(f"   New recommendation: {result.get('title', 'N/A')}")
     return result
 
 
@@ -686,12 +739,15 @@ def handle_user_input(user_input, user_name=None, conversation_history=None, tim
         logger.info(f"   With {len(image_base64_data)} image(s) for vision API")
     
     logger.info("Step 1: Classifying intent (with chat response)...")
+    if image_base64_data:
+        logger.info(f"   With {len(image_base64_data)} image(s) for vision")
     intent = classify_intent(
         user_input, 
         conversation_history=conversation_history,
         user_name=user_name,
         time_of_day=time_of_day,
-        chat_style=chat_style
+        chat_style=chat_style,
+        image_base64_data=image_base64_data
     )
     intent_type = intent.get("type", "chat")
     logger.info(f"Step 2: Classification result: {intent_type}")
@@ -717,6 +773,7 @@ def handle_user_input(user_input, user_name=None, conversation_history=None, tim
                 additional_context=context,
                 conversation_history=conversation_history,
                 chat_style=chat_style,
+                image_base64_data=image_base64_data,
             )
             logger.info("Low budget response generated")
             return result
@@ -740,6 +797,7 @@ def handle_user_input(user_input, user_name=None, conversation_history=None, tim
                 additional_context=context,
                 conversation_history=conversation_history,
                 chat_style=chat_style,
+                image_base64_data=image_base64_data,
             )
             
             # Add recommendation context for rejection handling (with empty rejected_titles)
@@ -776,6 +834,7 @@ def handle_user_input(user_input, user_name=None, conversation_history=None, tim
                 additional_context=context,
                 conversation_history=conversation_history,
                 chat_style=chat_style,
+                image_base64_data=image_base64_data,
             )
             logger.info("Creative meal suggestions generated")
             return result
@@ -799,6 +858,7 @@ def handle_user_input(user_input, user_name=None, conversation_history=None, tim
                 additional_context=context,
                 conversation_history=conversation_history,
                 chat_style=chat_style,
+                image_base64_data=image_base64_data,
             )
             
             # Add recommendation context for rejection handling (with empty rejected_titles)
@@ -813,7 +873,7 @@ def handle_user_input(user_input, user_name=None, conversation_history=None, tim
             return result
 
     else:
-        # General chat - response already generated by classify_intent
+        # General chat - response already generated by classify_intent (with images if present)
         logger.info("Processing CHAT intent (using classify response directly)")
         chat_response = intent.get("response", "Hey! How can I help you today?")
         logger.info(f"Chat response ready (no 2nd LLM call): {len(chat_response)} chars")

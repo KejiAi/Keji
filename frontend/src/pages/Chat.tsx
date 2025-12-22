@@ -3,8 +3,6 @@ import { useNavigate, useLocation } from "react-router-dom";
 import PageContainer from "@/components/layout/PageContainer";
 import SEO from "@/components/common/SEO";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Textarea } from "@/components/ui/textarea";
 import { useToast } from "@/hooks/use-toast";
 import { getBackendUrl } from "@/lib/utils";
 import { useSession } from "@/contexts/SessionContext";
@@ -13,6 +11,7 @@ import type { OutgoingFile } from "@/contexts/SocketContext";
 import type { SocketHistoryMessage } from "@/contexts/SocketContext";
 import RecommendationPopup from "@/components/modals/RecommendationPopup";
 import { ConnectionStatus } from "@/components/common/ConnectionStatus";
+import ChatInputSection from "@/components/chat/ChatInputSection";
 
 const frontendUrl = import.meta.env.VITE_FRONTEND_BASE_URL;
 
@@ -131,15 +130,11 @@ const Chat = () => {
   const [selectedFiles, setSelectedFiles] = useState<File[]>([]);
   const [recommendation, setRecommendation] = useState<Recommendation | null>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
-  const fileInputRef = useRef<HTMLInputElement>(null);
-  const inputRef = useRef<HTMLTextAreaElement>(null);
   const hasProcessedInitialMessage = useRef(false);
   const [pendingInitialPayload, setPendingInitialPayload] = useState<{ message: string; files?: File[] } | null>(null);
   const pendingInitialPayloadRef = useRef<{ message: string; files?: File[] } | null>(null);
   const pendingInitialMessageRef = useRef<Message | null>(null);
   const hasInsertedPendingMessageRef = useRef(false);
-  const [textareaHeight, setTextareaHeight] = useState(48); // Initial height in pixels
-  const [borderRadius, setBorderRadius] = useState(24); // Initial border radius
   const [loadingMessage, setLoadingMessage] = useState("Keji is thinking");
   const loadingTimerRef = useRef<NodeJS.Timeout | null>(null);
   const currentChunkGroupRef = useRef<string | null>(null);
@@ -293,13 +288,21 @@ const Chat = () => {
       });
       
       if (!isAck) {
-        setLoading(false);
-        // Clear loading timer
-        if (loadingTimerRef.current) {
-          clearTimeout(loadingTimerRef.current);
-          loadingTimerRef.current = null;
+        // Check if a recommendation follows this message
+        if (data.recommendation_follows) {
+          // Keep loading state to show "Keji is thinking" before recommendation
+          console.log('📌 Chat message received, recommendation follows...');
+          setLoadingMessage("Keji is thinking");
+          setLoading(true);
+        } else {
+          setLoading(false);
+          // Clear loading timer
+          if (loadingTimerRef.current) {
+            clearTimeout(loadingTimerRef.current);
+            loadingTimerRef.current = null;
+          }
+          setLoadingMessage("Keji is thinking");
         }
-        setLoadingMessage("Keji is thinking");
       }
     });
 
@@ -367,10 +370,17 @@ const Chat = () => {
         setMessages((prev) => [...prev, chunkMessage]);
       }
       
-      // Final chunk - clear typing indicator
+      // Final chunk - clear typing indicator (unless recommendation follows)
       if (data.is_final) {
         currentChunkGroupRef.current = null;
-        setLoadingMessage("Keji is thinking");
+        if (data.recommendation_follows) {
+          // Keep loading state to show "Keji is thinking" before recommendation
+          console.log('📌 Final chunk received, recommendation follows...');
+          setLoadingMessage("Keji is thinking");
+          setLoading(true);
+        } else {
+          setLoadingMessage("Keji is thinking");
+        }
       }
     });
 
@@ -606,48 +616,7 @@ const Chat = () => {
     }
   }, [messages.length]);
 
-  // Auto-resize textarea based on content
-  useEffect(() => {
-    const textarea = inputRef.current;
-    if (!textarea) return;
-
-    const adjustHeight = () => {
-      textarea.style.height = "auto";
-
-      const lineHeight = 16; // Tailwind text-base = 16px
-      const minHeight = 12;  // placeholder only
-      const maxLines = 5;
-      const maxHeight = lineHeight * maxLines;
-
-      const scrollHeight = textarea.scrollHeight;
-      let lines = Math.ceil(scrollHeight / lineHeight);
-
-      lines = Math.max(1, lines);
-
-      const newHeight = Math.min(Math.max(lines * lineHeight, minHeight), maxHeight);
-
-      let newBorderRadius = 24;
-
-      if (lines === 1) newBorderRadius = 24;
-      else if (lines === 2) newBorderRadius = 20;
-      else if (lines === 3) newBorderRadius = 16;
-      else if (lines === 4) newBorderRadius = 12;
-      else {
-        newBorderRadius = 8;
-        textarea.style.overflowY = "auto";
-      }
-
-      if (lines < maxLines) {
-        textarea.style.overflowY = "hidden";
-      }
-
-      setTextareaHeight(newHeight);
-      setBorderRadius(newBorderRadius);
-      textarea.style.height = `${newHeight}px`;
-    };
-
-    adjustHeight();
-  }, [inputMessage]);
+  // Scroll to bottom when new messages arrive
 
 
   const MAX_ATTACHMENTS = 2;
@@ -878,34 +847,6 @@ const Chat = () => {
 
   const handleSendMessage = () => {
     void sendMessage(inputMessage, selectedFiles.length > 0 ? selectedFiles : undefined);
-    inputRef.current?.focus();
-  };
-
-  const handleFileSelect = () => {
-    fileInputRef.current?.click();
-  };
-
-  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const files = e.target.files;
-    if (files) {
-      const newFiles = Array.from(files);
-      const combined = [...selectedFiles, ...newFiles];
-      if (combined.length > MAX_ATTACHMENTS) {
-        toast({
-          title: "Attachment limit reached",
-          description: `You can only attach up to ${MAX_ATTACHMENTS} files at a time.`,
-        });
-      }
-      setSelectedFiles(combined.slice(0, MAX_ATTACHMENTS));
-    }
-    // Clear the input so same file can be selected again if needed
-    if (fileInputRef.current) {
-      fileInputRef.current.value = "";
-    }
-  };
-
-  const removeFile = (index: number) => {
-    setSelectedFiles(prev => prev.filter((_, i) => i !== index));
   };
 
   const handleRecommendationClose = () => {
@@ -955,6 +896,40 @@ const Chat = () => {
           health: newRecommendation.health,
           recommendation_context: newRecommendation.recommendation_context,
         });
+        setLoading(false);
+      } else if (newRecommendation.type === 'chat_and_recommendation') {
+        // Chat + Recommendation: Show chat first, then recommendation after delay
+        console.log('📌 Chat + Recommendation received');
+        
+        // 1. Add chat message to messages
+        if (newRecommendation.chat) {
+          const chatMessage: Message = {
+            id: Date.now().toString(),
+            text: newRecommendation.chat,
+            sender: "ai",
+            timestamp: new Date(),
+          };
+          setMessages((prev) => [...prev, chatMessage]);
+        }
+        
+        // 2. Keep loading animation for a moment, then show recommendation
+        setLoadingMessage("Keji is thinking");
+        
+        // 3. After delay, show the recommendation
+        setTimeout(() => {
+          const rec = newRecommendation.recommendation;
+          if (rec && rec.title && rec.content) {
+            setRecommendation({
+              title: rec.title,
+              content: rec.content,
+              health: rec.health,
+              recommendation_context: newRecommendation.recommendation_context,
+            });
+          }
+          setLoading(false);
+        }, 5000); // 2 second delay to show "Keji is thinking" after chat message
+        
+        return; // Don't setLoading(false) in finally - handled in setTimeout
       } else if (newRecommendation.type === 'chat') {
         // If no more recommendations available, show chat message
         const aiMessage: Message = {
@@ -964,6 +939,9 @@ const Chat = () => {
           timestamp: new Date(),
         };
         setMessages((prev) => [...prev, aiMessage]);
+        setLoading(false);
+      } else {
+        setLoading(false);
       }
     } catch (error) {
       console.error('Error rejecting recommendation:', error);
@@ -972,7 +950,6 @@ const Chat = () => {
         description: "Failed to get new recommendation. Please try again.",
         variant: "destructive",
       });
-    } finally {
       setLoading(false);
     }
   };
@@ -1301,135 +1278,17 @@ const Chat = () => {
         {/* Spacer between chat interface and input section */}
         <div className="h-3 flex-shrink-0 bg-background"></div>
 
-        {/* Input section - separate div that sits below chat interface */}
-        <div className="bg-[#FFFBFB] flex-shrink-0" style={{ borderTopLeftRadius: '40px', borderTopRightRadius: '40px' }}>
-          <div className="w-full">
-            {/* File preview - displayed above */}
-            {selectedFiles.length > 0 && (
-              <div className="px-2 mx-4 mt-3">
-                <div className="flex flex-wrap gap-3">
-                  {selectedFiles.map((file, index) => {
-                    const isImage = file.type.startsWith('image/');
-                    const fileUrl = isImage ? URL.createObjectURL(file) : null;
-                    
-                    return (
-                      <div key={index} className="relative group">
-                        <div className="flex flex-col items-center gap-1 bg-muted p-2 rounded-lg">
-                          {isImage && fileUrl ? (
-                            <img 
-                              src={fileUrl} 
-                              alt={file.name}
-                              className="w-16 h-16 object-cover rounded"
-                              onLoad={() => URL.revokeObjectURL(fileUrl)}
-                            />
-                          ) : (
-                            <div className="w-16 h-16 bg-background flex items-center justify-center rounded">
-                              <svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-muted-foreground">
-                                <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
-                                <polyline points="14 2 14 8 20 8"></polyline>
-                              </svg>
-                            </div>
-                          )}
-                          <span className="text-xs truncate max-w-[64px] text-center">{file.name}</span>
-                        </div>
-                        <button
-                          onClick={() => removeFile(index)}
-                          className="absolute -top-0 -right-0 bg-white text-black text-2xl rounded-full w-6 h-6 flex items-center justify-center hover:opacity-80 transition-opacity"
-                        >
-                          ×
-                        </button>
-                      </div>
-                    );
-                  })}
-                </div>
-              </div>
-            )}
-
-            {/* Hidden file input */}
-              <input
-                ref={fileInputRef}
-                type="file"
-                multiple
-                accept=".jpg,.jpeg,.png,.pdf,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.txt"
-                className="hidden"
-                onChange={handleFileChange}
-              />
-
-            {/* Chat input placeholder - displayed above */}
-              <div 
-              className="flex items-end p-2 flex-1 mx-4 mt-3 transition-all duration-200"
-              style={textareaHeight > 48 ? { 
-                  borderRadius: `${borderRadius}px`,
-                minHeight: `${textareaHeight + 16}px`
-              } : { borderRadius: '24px' }}
-            > 
-                <Textarea
-                  ref={inputRef}
-                  value={inputMessage}
-                  onChange={(e) => setInputMessage(e.target.value)}
-                  placeholder="What can I eat this morn?"
-                className="flex-1 bg-transparent text-base placeholder:text-muted-foreground/70 placeholder:text-base px-2 py-3 resize-none min-h-[48px]"
-                  onKeyDown={(e) => {
-                    const isMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
-                    if (e.key === "Enter") {
-                      if (isMobile) {
-                        if (e.ctrlKey || e.metaKey) {
-                          e.preventDefault();
-                          handleSendMessage();
-                        }
-                      } else {
-                        if (!e.shiftKey) {
-                          e.preventDefault();
-                          handleSendMessage();
-                        }
-                      }
-                    }
-                  }}
-                  rows={1}
-                />
-            </div>
-
-            {/* Buttons container - displayed below and centralized */}
-            <div className="flex items-center px-4 pb-4 pt-1 justify-between mb-2">
-              <button onClick={handleFileSelect} className="flex-shrink-0 mb-1">
-                  <img src="assets/All Icon Used/ic_round-plus2.png" alt="Upload Button" className="h-10 w-10 object-contain" />
-              </button>
-
-              <div className="flex items-center justify-center gap-[10px]">
-                <Button
-                  variant="ghost"
-                  size="icon"
-                  className="p-0 hover:opacity-80 transition"
-                >
-                  <img
-                    src="assets/All Icon Used/mic-HP.png"
-                    alt="mic"
-                    className="h-6 w-6 object-contain"
-                  />
-                  <span className="sr-only">Voice input</span>
-                </Button>
-
-              <Button
-                variant="ghost"
-                size="icon"
-                  className="h-[44px] w-[44px] rounded-full bg-black flex-shrink-0 p-0"
-                  onClick={handleSendMessage}
-                  disabled={
-                    loading ||
-                    (!inputMessage.trim() && selectedFiles.length === 0)
-                  }
-              >
-                <img
-                    src="assets/All Icon Used/iconamoon_send-fill-HP.png"
-                    alt="Send"
-                    className="h-6 w-6 object-contain"
-                />
-                  <span className="sr-only">Send message</span>
-              </Button>
-              </div>
-            </div>
-          </div>
-        </div>
+        {/* Input section */}
+        <ChatInputSection
+          message={inputMessage}
+          onMessageChange={setInputMessage}
+          onSendMessage={handleSendMessage}
+          selectedFiles={selectedFiles}
+          onFilesChange={setSelectedFiles}
+          placeholder="What can I eat this morn?"
+          isSendDisabled={loading}
+          isFixed={false}
+        />
 
         {/* Recommendation Popup (overlay) */}
         {recommendation && (

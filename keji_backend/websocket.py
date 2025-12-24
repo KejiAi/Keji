@@ -578,7 +578,7 @@ def handle_send_message(data):
                         'role': 'assistant',
                         'content': '',  # Empty content - LLM will respond separately
                         'message_id': None,
-                        'timestamp': datetime.utcnow().isoformat(),
+                        'timestamp': datetime.now().isoformat(),
                         'is_ack': True,
                         'uploaded_files': uploaded_files,
                         'user_message_id': user_msg.id,

@@ -11,10 +11,19 @@ to avoid adding latency to chat responses.
 """
 
 import logging
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import List, Dict, Optional, Tuple
 
 logger = logging.getLogger(__name__)
+
+
+def to_utc_isoformat(dt):
+    """Convert a datetime to ISO format with 'Z' suffix for proper JS parsing."""
+    if dt is None:
+        return datetime.now(timezone.utc).isoformat().replace('+00:00', 'Z')
+    if dt.tzinfo is None:
+        return dt.isoformat() + 'Z'
+    return dt.astimezone(timezone.utc).isoformat().replace('+00:00', 'Z')
 
 # Configuration
 RECENT_MESSAGES_COUNT = 10  # Number of recent messages to include (5 user + 5 bot turns)
@@ -201,7 +210,7 @@ def get_full_history_for_frontend(conversation_id: int) -> List[Dict[str, str]]:
             "message_id": msg.id,
             "sender": msg.sender,
             "text": msg.text,
-            "timestamp": msg.timestamp.isoformat()
+            "timestamp": to_utc_isoformat(msg.timestamp)
         }
 
         attachments = getattr(msg, "attachments", []) or []

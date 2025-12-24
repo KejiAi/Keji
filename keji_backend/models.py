@@ -1,6 +1,11 @@
 from extensions import db
-from datetime import datetime
+from datetime import datetime, timezone
 from flask_login import UserMixin
+
+
+def utc_now():
+    """Return current UTC time for consistent timestamp handling."""
+    return datetime.now(timezone.utc)
 from werkzeug.security import generate_password_hash, check_password_hash
 import logging
 
@@ -16,7 +21,7 @@ class User(UserMixin, db.Model):
     chat_style = db.Column(db.String(50), default="pure_english")
     verification_code = db.Column(db.String(6), nullable=True)
     verification_token = db.Column(db.String(255), nullable=True)
-    created_at = db.Column(db.DateTime, default=datetime.now)
+    created_at = db.Column(db.DateTime, default=utc_now)
 
     def set_password(self, password):
         logger.debug(f"Setting password for user: {self.email}")
@@ -32,7 +37,7 @@ class User(UserMixin, db.Model):
 class Conversation(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     user_id = db.Column(db.Integer, db.ForeignKey("user.id"), nullable=False)
-    created_at = db.Column(db.DateTime, default=datetime.now)
+    created_at = db.Column(db.DateTime, default=utc_now)
     memory_summary = db.Column(db.Text, nullable=True)  # Compressed summary of older messages
     pruned_count = db.Column(db.Integer, default=0)  # Number of messages that have been summarized
     last_summary_at = db.Column(db.DateTime, nullable=True)  # When summary was last updated
@@ -44,7 +49,7 @@ class Message(db.Model):
     conversation_id = db.Column(db.Integer, db.ForeignKey("conversation.id"), nullable=False)
     sender = db.Column(db.String(10), nullable=False)  # "user" or "bot"
     text = db.Column(db.Text, nullable=False)
-    timestamp = db.Column(db.DateTime, default=datetime.now)
+    timestamp = db.Column(db.DateTime, default=utc_now)
     
     # Chunking support for streaming messages
     message_group_id = db.Column(db.String(36), nullable=True)  # UUID to group chunks
@@ -66,7 +71,7 @@ class MessageAttachment(db.Model):
     url = db.Column(db.String(1024), nullable=False)
     content_type = db.Column(db.String(120), nullable=True)
     size_bytes = db.Column(db.Integer, nullable=True)
-    created_at = db.Column(db.DateTime, default=datetime.now)
+    created_at = db.Column(db.DateTime, default=utc_now)
 
 
 class Feedback(db.Model):
@@ -74,7 +79,7 @@ class Feedback(db.Model):
     user_id = db.Column(db.Integer, db.ForeignKey("user.id"), nullable=False, index=True)
     rating = db.Column(db.Integer, nullable=False)  # 1-5 stars
     comment = db.Column(db.Text, nullable=True)
-    created_at = db.Column(db.DateTime, default=datetime.now)
+    created_at = db.Column(db.DateTime, default=utc_now)
     
     # Relationship to user
     user = db.relationship("User", backref=db.backref("feedbacks", lazy=True))

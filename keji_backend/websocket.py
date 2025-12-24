@@ -13,8 +13,25 @@ from context_manager import (
     process_conversation_context,
     get_full_history_for_frontend
 )
-from datetime import datetime
+from datetime import datetime, timezone
 import logging
+
+
+def get_utc_timestamp():
+    """Return UTC timestamp in ISO format with 'Z' suffix for proper JS parsing."""
+    return datetime.now(timezone.utc).isoformat().replace('+00:00', 'Z')
+
+
+def to_utc_isoformat(dt):
+    """Convert a datetime to UTC ISO format with 'Z' suffix for proper JS parsing."""
+    if dt is None:
+        return get_utc_timestamp()
+    # If datetime is naive (no timezone), assume it's local time and just return with Z
+    # since we're storing local time in DB and want consistent frontend display
+    if dt.tzinfo is None:
+        # Treat as local, return as-is with Z for consistent JS parsing
+        return dt.isoformat() + 'Z'
+    return dt.astimezone(timezone.utc).isoformat().replace('+00:00', 'Z')
 import time
 import uuid
 import re
@@ -494,7 +511,7 @@ def handle_send_message(data):
         # Emit confirmation that message was received
         emit('message_saved', {
             'message_id': user_msg.id,
-            'timestamp': user_msg.timestamp.isoformat(),
+            'timestamp': to_utc_isoformat(user_msg.timestamp),
             'client_message_id': client_message_id
         })
 
@@ -521,7 +538,7 @@ def handle_send_message(data):
                 'role': 'assistant',
                 'content': ack_text,
                 'message_id': ack_msg.id,
-                'timestamp': ack_msg.timestamp.isoformat(),
+                'timestamp': to_utc_isoformat(ack_msg.timestamp),
                 'is_ack': True,
                 'user_message_id': user_msg.id,
                 'client_message_id': client_message_id
@@ -565,7 +582,7 @@ def handle_send_message(data):
                         'role': 'assistant',
                         'content': uploads_text,
                         'message_id': upload_msg.id,
-                        'timestamp': upload_msg.timestamp.isoformat(),
+                        'timestamp': to_utc_isoformat(upload_msg.timestamp),
                         'is_ack': True,
                         'uploaded_files': uploaded_files,
                         'user_message_id': user_msg.id,
@@ -578,7 +595,7 @@ def handle_send_message(data):
                         'role': 'assistant',
                         'content': '',  # Empty content - LLM will respond separately
                         'message_id': None,
-                        'timestamp': datetime.now().isoformat(),
+                        'timestamp': get_utc_timestamp(),
                         'is_ack': True,
                         'uploaded_files': uploaded_files,
                         'user_message_id': user_msg.id,
@@ -600,7 +617,7 @@ def handle_send_message(data):
                     'role': 'assistant',
                     'content': error_text,
                     'message_id': error_msg.id,
-                    'timestamp': error_msg.timestamp.isoformat(),
+                    'timestamp': to_utc_isoformat(error_msg.timestamp),
                     'is_ack': True,
                     'upload_errors': upload_errors,
                     'user_message_id': user_msg.id,
@@ -690,7 +707,7 @@ def handle_send_message(data):
             'role': 'assistant',
             'content': 'Omo, something don happen for my side. Abeg try again? I dey here to help you!',
             'message_id': None,
-            'timestamp': datetime.now().isoformat()
+            'timestamp': get_utc_timestamp()
         })
         return
 
@@ -760,7 +777,7 @@ def handle_send_message(data):
                             'is_final': is_final,
                             'message_group_id': message_group_id,
                             'message_id': chunk_msg.id,
-                            'timestamp': chunk_msg.timestamp.isoformat(),
+                            'timestamp': to_utc_isoformat(chunk_msg.timestamp),
                             'recommendation_follows': is_final  # Tell frontend a recommendation is coming after final chunk
                         }
                         emit('receive_chunk', chunk_data)
@@ -779,7 +796,7 @@ def handle_send_message(data):
                         'role': 'assistant',
                         'content': chat_text,
                         'message_id': chat_msg.id,
-                        'timestamp': chat_msg.timestamp.isoformat(),
+                        'timestamp': to_utc_isoformat(chat_msg.timestamp),
                         'recommendation_follows': True  # Tell frontend a recommendation is coming
                     })
                 
@@ -889,7 +906,7 @@ def handle_send_message(data):
                     'is_final': i == len(chunks) - 1,
                     'message_group_id': message_group_id,
                     'message_id': chunk_msg.id,
-                    'timestamp': chunk_msg.timestamp.isoformat()
+                    'timestamp': to_utc_isoformat(chunk_msg.timestamp)
                 }
                 emit('receive_chunk', chunk_data)
                 logger.debug(f"Chunk {i+1}/{len(chunks)} sent")
@@ -912,7 +929,7 @@ def handle_send_message(data):
                     'role': 'assistant',
                     'content': reply_text,
                     'message_id': bot_msg.id,
-                    'timestamp': bot_msg.timestamp.isoformat()
+                    'timestamp': to_utc_isoformat(bot_msg.timestamp)
                 }
                 emit('receive_message', message_data)
                 logger.info("Message sent to client")
@@ -928,7 +945,7 @@ def handle_send_message(data):
                 'role': 'assistant',
                 'content': reply_text,
                 'message_id': None,
-                'timestamp': datetime.now().isoformat()
+                'timestamp': get_utc_timestamp()
             })
         except:
             emit('error', {'message': 'Failed to process message'})
@@ -1007,7 +1024,7 @@ def handle_accept_recommendation(data):
             'status': 'saved',
             'bot_message_id': bot_msg.id,
             'user_message_id': user_msg.id,
-            'timestamp': bot_msg.timestamp.isoformat()
+            'timestamp': to_utc_isoformat(bot_msg.timestamp)
         })
         
     except Exception as e:
@@ -1060,7 +1077,7 @@ def handle_accept_recommendation(data):
             'role': 'assistant',
             'content': reply_text,
             'message_id': confirmation_msg.id,
-            'timestamp': confirmation_msg.timestamp.isoformat()
+            'timestamp': to_utc_isoformat(confirmation_msg.timestamp)
         })
         
     except Exception as e:

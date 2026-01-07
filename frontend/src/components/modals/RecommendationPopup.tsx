@@ -120,16 +120,25 @@ const RecommendationPopup = ({ recommendation, onClose, onAccept, onReject }: Re
             {/* Modal */}
             <div className="relative bg-background px-4 pb-4 rounded-2xl pt-4" onClick={(e) => e.stopPropagation()}>
               {/* Health Icon at top left */}
-              <button
-                onClick={handleCloseHealthModal}
-                className="w-10 h-10 bg-white rounded-full flex items-center justify-center shadow-sm hover:opacity-80 transition-opacity cursor-pointer"
+              <Button
+                  variant="ghost"
+                  onClick={handleCloseHealthModal}
+                  className="p-0"
               >
-                <img
-                  src="/assets/All Icon Used/material-symbols-light_health-and-safety.png"
-                  alt="Health icon"
-                  className="w-10 h-10 object-contain"
-                />
-              </button>
+              <svg
+                  xmlns="http://www.w3.org/2000/svg"
+                  style={{ width: 24, height: 24 }}
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="black"
+                  strokeWidth={2}
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+              >
+                  <path d="M15 5 L7 12 L15 19" />
+                  <line x1="7" y1="12" x2="21" y2="12" />
+                </svg>
+              </Button>
 
               {/* Top Section */}
               <div className="pt-4 max-w-[85%] h-[20rem]">

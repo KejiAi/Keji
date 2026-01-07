@@ -494,6 +494,9 @@ Current user message: "{user_input}"
 Remember:
 - budget: Return {{"type": "budget", "value": number}}
 - ingredient: Return {{"type": "ingredient", "value": ["item1", "item2"]}}
+- hybrid: Return {{"type": "hybrid", "budget": number, "ingredients": ["item1", "item2"]}}
+  Use "hybrid" when user mentions BOTH a budget/money AND ingredients they have at home.
+  Example: "I have N1500 and rice at home" → hybrid
 - chat (or decision): Return {{"type": "chat", "response": "your_friendly_response"}}
 
 Answer (JSON only):"""
@@ -526,6 +529,10 @@ Answer (JSON only):"""
         elif intent_type == "ingredient":
             ingredients = parsed.get('value', [])
             logger.info(f"Intent: INGREDIENT ({', '.join(ingredients) if ingredients else 'none'})")
+        elif intent_type == "hybrid":
+            budget = parsed.get('budget', 0)
+            ingredients = parsed.get('ingredients', [])
+            logger.info(f"Intent: HYBRID (N{budget} + {', '.join(ingredients) if ingredients else 'none'})")
         else:
             response_preview = parsed.get('response', '')[:50]
             logger.info(f"Intent: CHAT (response: {response_preview}...)")
@@ -604,7 +611,9 @@ def handle_rejected_recommendation(
             "health": [{"label": "Energy", "description": "Dev mode response"}]
         }
         # Add context for potential further rejections (with rejected_titles)
-        if budget:
+        if budget and ingredients:
+            result["recommendation_context"] = {"context_type": "hybrid", "budget": budget, "ingredients": ingredients, "rejected_titles": all_rejected}
+        elif budget:
             result["recommendation_context"] = {"context_type": "budget", "budget": budget, "rejected_titles": all_rejected}
         elif ingredients:
             result["recommendation_context"] = {"context_type": "ingredient", "ingredients": ingredients, "rejected_titles": all_rejected}
@@ -625,7 +634,20 @@ def handle_rejected_recommendation(
     if all_rejected:
         rejection_instruction = f" Do NOT recommend any of these: {', '.join(all_rejected)}."
     
-    if budget:
+    if budget and ingredients:
+        # HYBRID: User has both budget AND ingredients
+        context_type = "hybrid"
+        budget_foods = get_foods_by_budget(budget)
+        ingredient_foods = get_meals_by_ingredients(ingredients)
+        context["budget"] = budget
+        context["ingredients"] = ingredients
+        context["foods_within_budget"] = budget_foods
+        context["foods_using_ingredients"] = ingredient_foods
+        context["rejected_titles"] = all_rejected
+        context["note"] = f"User rejected these meals: {all_rejected}. Suggest a DIFFERENT option combining budget N{budget} and ingredients: {', '.join(ingredients)}."
+        prompt = f"User has N{budget} budget AND these ingredients: {', '.join(ingredients)}.{rejection_instruction} Pick a DIFFERENT option that combines their budget and ingredients. Keep content SHORT (2-3 sentences max). Include health benefits."
+        foods = budget_foods + ingredient_foods  # Combined for logging
+    elif budget:
         context_type = "budget"
         foods = get_foods_by_budget(budget)
         context["budget"] = budget
@@ -665,7 +687,9 @@ def handle_rejected_recommendation(
     # Add recommendation context for potential further rejections (including all rejected titles)
     # This applies to both "recommendation" and "chat_and_recommendation" types
     if result.get("type") in ("recommendation", "chat_and_recommendation"):
-        if context_type == "budget":
+        if context_type == "hybrid":
+            result["recommendation_context"] = {"context_type": "hybrid", "budget": budget, "ingredients": ingredients, "rejected_titles": all_rejected}
+        elif context_type == "budget":
             result["recommendation_context"] = {"context_type": "budget", "budget": budget, "rejected_titles": all_rejected}
         elif context_type == "ingredient":
             result["recommendation_context"] = {"context_type": "ingredient", "ingredients": ingredients, "rejected_titles": all_rejected}
@@ -871,6 +895,69 @@ def handle_user_input(user_input, user_name=None, conversation_history=None, tim
             
             logger.info("Ingredient-based recommendation generated")
             return result
+
+    elif intent_type == "hybrid":
+        # User has BOTH budget AND ingredients - combine both queries
+        budget = intent.get("budget", 0)
+        ingredients = intent.get("ingredients", [])
+        if not isinstance(ingredients, list):
+            ingredients = [ingredients] if ingredients else []
+        
+        logger.info(f"Processing HYBRID intent: N{budget} + {', '.join(ingredients) if ingredients else 'none'}")
+        
+        # Run BOTH queries
+        budget_foods = get_foods_by_budget(budget)
+        ingredient_foods = get_meals_by_ingredients(ingredients)
+        
+        logger.info(f"   Budget foods: {len(budget_foods)} options within N{budget}")
+        logger.info(f"   Ingredient foods: {len(ingredient_foods)} meals using ingredients")
+        
+        # Build combined context for LLM
+        context = {
+            "budget": budget,
+            "available_ingredients": ingredients,
+            "foods_within_budget": budget_foods,
+            "foods_using_ingredients": ingredient_foods,
+            "mode": "hybrid",
+            "note": f"User has N{budget} budget AND these ingredients at home: {', '.join(ingredients)}"
+        }
+        if chat_style:
+            context["chat_style"] = chat_style
+        
+        # Hybrid prompt that considers both budget and ingredients
+        prompt = f"""User has N{budget} budget AND these ingredients at home: {', '.join(ingredients)}.
+
+Foods within their budget: {len(budget_foods)} options
+Foods they can make with their ingredients: {len(ingredient_foods)} options
+
+Recommend the BEST approach - pick ONE of these strategies:
+1. A meal where they USE their ingredients at home and spend budget on just the missing items needed
+2. OR a combo: buy ready food with part of budget + use ingredients to make a complementary side dish
+3. OR if ingredients alone can make a full meal, save the money and cook at home
+
+Consider what gives the best value and satisfaction. Keep content SHORT (2-3 sentences max). Include health benefits."""
+        
+        logger.debug(f"   Hybrid recommendation with {len(budget_foods)} budget options + {len(ingredient_foods)} ingredient options")
+        
+        result = call_llm(
+            prompt,
+            additional_context=context,
+            conversation_history=conversation_history,
+            chat_style=chat_style,
+            image_base64_data=image_base64_data,
+        )
+        
+        # Add recommendation context for rejection handling
+        if result.get("type") == "recommendation":
+            result["recommendation_context"] = {
+                "context_type": "hybrid",
+                "budget": budget,
+                "ingredients": ingredients,
+                "rejected_titles": []
+            }
+        
+        logger.info("Hybrid recommendation generated")
+        return result
 
     else:
         # General chat - response already generated by classify_intent (with images if present)

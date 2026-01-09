@@ -7,19 +7,17 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { InputVerification } from "@/components/ui/input-verification";
-import { Mail, KeyRound, CheckCircle, Clock } from "lucide-react";
+import { Mail, KeyRound, Clock } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
-import { verifyEmailWithCode, resendConfirmationEmail } from "@/lib/auth";
-import { useAuthContext } from "@/contexts/AuthContext";
+import { verifyPasswordResetCode, resetPassword } from "@/lib/auth";
 
-const EmailVerification = () => {
+const ForgotPassword = () => {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
   const { toast } = useToast();
-  const { login } = useAuthContext();
   
   const email = searchParams.get("email");
-  const [isDialogOpen, setIsDialogOpen] = useState(false);
+  const [isCodeDialogOpen, setIsCodeDialogOpen] = useState(false);
   const [verificationCode, setVerificationCode] = useState("");
   const [isVerifying, setIsVerifying] = useState(false);
   const [isResending, setIsResending] = useState(false);
@@ -38,39 +36,12 @@ const EmailVerification = () => {
     }
   }, [resendCountdown]);
 
-
-
-
-
-
-
-  // Placeholder function for email link verification
-  const handleEmailLinkVerification = () => {
-    // This would typically be handled by a URL parameter or backend endpoint
-    toast({
-      title: "Email Verified!",
-      description: "Your account has been successfully verified.",
-    });
-    
-    setTimeout(() => {
-      navigate("/start?mode=login");
-    }, 1500);
-  };
-
-
-
-
-
-
-
-  
-
-  // Verify email with 6-digit code using Supabase OTP
+  // Verify password reset with code, then navigate to reset-password page
   const handleCodeVerification = async (code: string) => {
     if (!email) {
       toast({
         title: "Error",
-        description: "No email address found. Please try signing up again.",
+        description: "No email address found. Please try again.",
         variant: "destructive",
       });
       return;
@@ -78,20 +49,16 @@ const EmailVerification = () => {
 
     setIsVerifying(true);
     try {
-      const result = await verifyEmailWithCode(email, code);
+      const result = await verifyPasswordResetCode(email, code);
 
-      if (result.success && result.data?.user && result.data?.session) {
+      if (result.success && result.data?.session) {
         toast({
-          title: "Email Verified!",
-          description: "Your account has been successfully verified.",
+          title: "Code Verified!",
+          description: "Now set your new password.",
         });
-        setIsDialogOpen(false);
-        
-        // Log the user in
-        login(result.data.user, result.data.session);
-        
-        // Navigate to homepage after a short delay
-        setTimeout(() => navigate("/homepage"), 1500);
+        setIsCodeDialogOpen(false);
+        // Navigate to the password reset page
+        navigate("/reset-password");
       } else {
         toast({
           title: "Invalid Code",
@@ -110,26 +77,25 @@ const EmailVerification = () => {
     }
   };
 
-
-  // Resend verification email using Supabase
+  // Resend reset email
   const handleResendCode = async () => {
     if (!canResend || isResending || !email) return;
 
     setIsResending(true);
     try {
-      const result = await resendConfirmationEmail(email);
+      const result = await resetPassword(email);
 
       if (result.success) {
         toast({ 
           title: "Email Sent!", 
-          description: "A new verification link and code have been sent to your email." 
+          description: "A new password reset link and code have been sent to your email." 
         });
         setCanResend(false);
         setResendCountdown(60);
       } else {
         toast({ 
           title: "Error", 
-          description: result.error?.userMessage || "Could not resend verification email.", 
+          description: result.error?.userMessage || "Could not resend email.", 
           variant: "destructive" 
         });
       }
@@ -138,12 +104,11 @@ const EmailVerification = () => {
     }
   };
 
-
   return (
     <PageContainer Logo={<Logo />} variant="compact">
       <SEO
-        title="Verify Your Email - Keji AI"
-        description="Verify your email address to complete your account setup."
+        title="Reset Your Password - Keji AI"
+        description="Reset your Keji AI account password."
       />
       
       <section className="max-w-2xl mx-auto">
@@ -155,8 +120,8 @@ const EmailVerification = () => {
             Check Your Email
           </h1>
           <p className="font-geist text-lg text-muted-foreground px-2">
-            We’ve sent a verification link and code to <strong>{email}</strong>.
-            You can either click the link in the email or enter the code manually to verify your account.
+            We've sent a password reset link and code to <strong>{email}</strong>.
+            You can either click the link in the email or enter the code manually.
           </p>
         </div>
 
@@ -167,13 +132,13 @@ const EmailVerification = () => {
               <div className="mx-auto w-12 h-12 bg-secondary/10 rounded-full flex items-center justify-center mb-3">
                 <KeyRound className="w-6 h-6 text-secondary-foreground" />
               </div>
-              <CardTitle className="text-xl">Enter Verification Code</CardTitle>
+              <CardTitle className="text-xl">Enter Reset Code</CardTitle>
               <CardDescription>
-                Enter the 8-digit code from your email manually
+                Enter the 8-digit code from your email
               </CardDescription>
             </CardHeader>
             <CardContent className="space-y-4">
-              <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
+              <Dialog open={isCodeDialogOpen} onOpenChange={setIsCodeDialogOpen}>
                 <DialogTrigger asChild>
                   <Button variant="hero" className="w-full">
                     Enter Code Manually
@@ -181,7 +146,7 @@ const EmailVerification = () => {
                 </DialogTrigger>
                 <DialogContent className="max-w-[calc(100vw-2rem)] sm:max-w-md mx-auto px-4 sm:px-6">
                   <DialogHeader className="text-center mt-6 sm:mt-8">
-                    <DialogTitle className="text-xl sm:text-2xl font-bold text-center">Enter Verification Code</DialogTitle>
+                    <DialogTitle className="text-xl sm:text-2xl font-bold text-center">Enter Reset Code</DialogTitle>
                     <DialogDescription className="text-sm sm:text-base text-center">
                       Enter the 8-digit code sent to {email}
                     </DialogDescription>
@@ -249,4 +214,4 @@ const EmailVerification = () => {
   );
 };
 
-export default EmailVerification;
+export default ForgotPassword;

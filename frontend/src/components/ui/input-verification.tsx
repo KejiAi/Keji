@@ -2,7 +2,7 @@ import * as React from "react";
 import { cn } from "@/lib/utils";
 
 export interface InputVerificationProps {
-  length?: 4 | 6;
+  length?: 4 | 6 | 8;
   value?: string;
   onChange?: (value: string) => void;
   onComplete?: (value: string) => void;
@@ -79,7 +79,12 @@ const InputVerification = React.forwardRef<
   return (
     <div
       ref={ref}
-      className={cn("flex gap-1.5 sm:gap-2 justify-center", className)}
+      className={cn(
+        "flex flex-wrap gap-3 min-[500px]:gap-3 justify-center items-center",
+        // For 8 digits: 6+2 layout below 500px, all 8 on one line at 500px+
+        length === 8 && "max-w-[320px] min-[500px]:max-w-none mx-auto",
+        className
+      )}
       {...props}
     >
       {Array.from({ length }, (_, index) => (

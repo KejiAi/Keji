@@ -1,12 +1,10 @@
 flask
 flask-sqlalchemy
 flask-migrate
-flask-login
 flask-cors
 flask-socketio
 python-socketio
 eventlet
-flask-dance #for GitHub, google OAuth
 python-dotenv
 psycopg2-binary
 werkzeug
@@ -15,7 +13,6 @@ gunicorn
 openai
 tiktoken
 resend
-authlib
 requests
 cloudinary
 certifi

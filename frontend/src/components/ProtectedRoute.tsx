@@ -1,9 +1,9 @@
 import { Navigate } from "react-router-dom";
-import { useSession } from "@/contexts/SessionContext";
+import { useAuthContext } from "@/contexts/AuthContext";
 import LoadingSpinner from "@/components/common/LoadingSpinner";
 
 const ProtectedRoute = ({ children }: { children: JSX.Element }) => {
-  const { isAuthenticated, isLoading } = useSession();
+  const { isAuthenticated, isLoading } = useAuthContext();
 
   // Always show loading until session validation is complete
   if (isLoading) {

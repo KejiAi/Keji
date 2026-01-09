@@ -4,83 +4,96 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { useState } from "react";
-import { useNavigate } from "react-router-dom";
-import { useSearchParams } from "react-router-dom";
+import { useNavigate, useSearchParams } from "react-router-dom";
 import Logo from "@/components/branding/Logo";
-import { getBackendUrl } from "@/lib/utils";
-import { useSession } from "@/contexts/SessionContext";
-import { Eye, EyeOff, Mail } from "lucide-react";
+import { useAuthContext } from "@/contexts/AuthContext";
+import { useAuth } from "@/hooks/useAuth";
+import { Eye, EyeOff } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
-
-const frontendUrl = import.meta.env.VITE_FRONTEND_BASE_URL;
-
 
 const Start = () => {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
   const [isLogin, setIsLogin] = useState(searchParams.get("mode") === "login"); // false = signup, true = login
   const [showPassword, setShowPassword] = useState(false);
-  const [forgotPasswordSuccess, setForgotPasswordSuccess] = useState(false);
-  const [isSubmitting, setIsSubmitting] = useState(false);
-  const [isForgotPasswordLoading, setIsForgotPasswordLoading] = useState(false);
-  const { login } = useSession();
   const { toast } = useToast();
+  
+  // New Supabase auth hooks
+  const { login } = useAuthContext();
+  const { 
+    handleSignIn, 
+    handleSignUp, 
+    handleGoogleSignIn, 
+    handleResetPassword,
+    isLoading: isSubmitting,
+    error: authError,
+    clearError 
+  } = useAuth();
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    setIsSubmitting(true);
+    clearError();
+    
     const form = e.target as HTMLFormElement;
     const formData = new FormData(form);
-    const data = {
-      name: formData.get("name") as string,
-      email: formData.get("email") as string,
-      password: formData.get("password") as string,
-    };
+    const email = (formData.get("email") as string).toLowerCase().trim();
+    const password = formData.get("password") as string;
+    const name = formData.get("name") as string;
 
-    try {
-      const endpoint = isLogin ? `${getBackendUrl()}/login` : `${getBackendUrl()}/sign-up`;
-      const requestBody = isLogin 
-        ? { email: data.email, password: data.password } 
-        : data;
+    if (isLogin) {
+      // Login with Supabase
+      const result = await handleSignIn({ email, password });
       
-      const res = await fetch(endpoint, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(requestBody),
-        credentials: "include"
-      });
-
-      if (res.ok) {
-        // For login, we need to get user data from the backend
-        if (isLogin) {
-          const sessionResponse = await fetch(`${getBackendUrl()}/check-session`, {
-            credentials: "include"
-          });
-          if (sessionResponse.ok) {
-            const userData = await sessionResponse.json();
-            login(userData);
-          }
-          navigate("/homepage");
-        } else {
-          // For signup, redirect to email verification
-          navigate(`/verify-email?email=${encodeURIComponent(data.email)}`);
-        }
-      } else {
-        const error = await res.json();
-        console.error("Authentication error:", error.error);
-        navigate("/error", { state: { message: error.error } });
+      if (result.success && result.user) {
+        navigate("/homepage");
+      } else if (authError) {
+        toast({
+          title: "Login Failed",
+          description: authError.userMessage,
+          variant: "destructive",
+        });
       }
-    } catch (err) {
-      console.error("Network error:", err);
-      navigate("/error", { state: { message: "Something went wrong. Try again later." } });
-    } finally {
-      setIsSubmitting(false);
+    } else {
+      // Sign up with Supabase
+      const result = await handleSignUp({ email, password, name });
+      
+      if (result.success && !result.isExistingUser) {
+        // Navigate to email verification page where user can enter code or wait for link
+        navigate(`/email-verification?email=${encodeURIComponent(email)}`);
+      } else if (result.isExistingUser) {
+        // Email already exists and is verified
+        toast({
+          title: "Email Already Registered",
+          description: "This email is already registered. Please log in instead.",
+          variant: "destructive",
+        });
+      } else if (authError) {
+        toast({
+          title: "Sign Up Failed",
+          description: authError.userMessage,
+          variant: "destructive",
+        });
+      }
     }
+  };
+
+  const handleGoogleLogin = async () => {
+    clearError();
+    const result = await handleGoogleSignIn();
+    
+    if (!result.success && authError) {
+      toast({
+        title: "Google Sign In Failed",
+        description: authError.userMessage,
+        variant: "destructive",
+      });
+    }
+    // Success: user will be redirected to Google, then to /auth/callback
   };
 
   const handleForgotPassword = async () => {
     const emailInput = document.getElementById("email") as HTMLInputElement;
-    const email = emailInput?.value || "";
+    const email = emailInput?.value?.trim() || "";
 
     if (!email) {
       toast({
@@ -91,47 +104,20 @@ const Start = () => {
       return;
     }
     
-    setIsForgotPasswordLoading(true);
+    clearError();
+    const result = await handleResetPassword(email);
 
-    try {
-      const res = await fetch(`${getBackendUrl()}/forgot-password`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ email }),
-        credentials: "include",
-      });
-
-      if (res.ok) {
-        const data = await res.json();
-        setForgotPasswordSuccess(true);
-
-        toast({
-          title: "📧 Reset link sent to your email!",
-          description: "Check your inbox and click the link to reset your password.",
-        });
-
-        // Optionally clear the input after success
-        emailInput.value = "";
-      } else {
-        const error = await res.json();
-        toast({
-          title: "❌ Reset Failed",
-          description: error.error || "Could not send reset email. Please try again.",
-          variant: "destructive",
-        });
-      }
-    } catch (err) {
-      console.error("Forgot password error:", err);
+    if (result.success) {
+      // Navigate to forgot password page where user can enter code or wait for link
+      navigate(`/forgot-password?email=${encodeURIComponent(email)}`);
+    } else if (authError) {
       toast({
-        title: "🚨 Server Error",
-        description: "Something went wrong. Please try again later.",
+        title: "❌ Reset Failed",
+        description: authError.userMessage,
         variant: "destructive",
       });
-    } finally {
-      setIsForgotPasswordLoading(false);
     }
   };
-
 
   return (
     <PageContainer Logo={<Logo />}>
@@ -148,27 +134,34 @@ const Start = () => {
           </header>
 
           <div className="space-y-6 mx-2 md:mx-6">
-            {!isLogin && (
-              <div className="flex justify-center">
-                <Button
-                  variant="pill"
-                  size="lg"
-                  className="w-50 rounded-2xl py-4 text-md mt-6"
-                  aria-label="Continue with Google"
-                  asChild
-                >
-                  <a href={`${getBackendUrl()}/login/google`}>
-                    <img
-                      src="/assets/All Icon Used/devicon_google.png"
-                      alt=""
-                      className="h-5 w-5 mr-2"
-                      aria-hidden
-                    />
-                    Continue with Google
-                  </a>
-                </Button>
+            {/* Google Sign In - Show for both login and signup */}
+            <div className="flex justify-center">
+              <Button
+                variant="pill"
+                size="lg"
+                className="w-50 rounded-2xl py-4 text-md mt-6"
+                aria-label="Continue with Google"
+                onClick={handleGoogleLogin}
+                disabled={isSubmitting}
+              >
+                <img
+                  src="/assets/All Icon Used/devicon_google.png"
+                  alt=""
+                  className="h-5 w-5 mr-2"
+                  aria-hidden
+                />
+                Continue with Google
+              </Button>
+            </div>
+
+            <div className="relative flex items-center justify-center">
+              <div className="absolute inset-0 flex items-center">
+                <div className="w-full border-t border-muted-foreground/20"></div>
               </div>
-            )}
+              <span className="relative bg-background px-4 text-sm text-muted-foreground">
+                or continue with email
+              </span>
+            </div>
 
             <form className="space-y-2" onSubmit={handleSubmit}>
               {!isLogin && (
@@ -183,6 +176,7 @@ const Start = () => {
                     placeholder="What should Keji call you?"
                     className="h-16 rounded-2xl text-lg md:text-lg"
                     required={!isLogin}
+                    disabled={isSubmitting}
                   />
                 </div>
               )}
@@ -197,6 +191,7 @@ const Start = () => {
                   placeholder="e.g John123@gmail.com"
                   className="h-16 rounded-2xl text-lg md:text-lg"
                   required
+                  disabled={isSubmitting}
                 />
               </div>
 
@@ -210,6 +205,8 @@ const Start = () => {
                     placeholder="e.g john1234@Secure"
                     className="h-16 rounded-2xl text-lg md:text-lg pr-12"
                     required
+                    minLength={6}
+                    disabled={isSubmitting}
                   />
                   <button
                     type="button"
@@ -225,10 +222,10 @@ const Start = () => {
                     <button
                       type="button"
                       onClick={handleForgotPassword}
-                      disabled={isForgotPasswordLoading}
+                      disabled={isSubmitting}
                       className="text-sm text-brand hover:underline font-medium transition-colors disabled:opacity-50"
                     >
-                      {isForgotPasswordLoading ? "Sending..." : "Forgot Password? 🔒"}
+                      Forgot Password? 🔒
                     </button>
                   </div>
                 )}
@@ -242,31 +239,19 @@ const Start = () => {
                   aria-label={isLogin ? "Log in" : "Sign up"}
                   type="submit"
                   loading={isSubmitting}
+                  disabled={isSubmitting}
                 >
                   {isSubmitting ? (isLogin ? "Logging in..." : "Signing up...") : (isLogin ? "Log in" : "Sign up")}
                 </Button>
               </div>
             </form>
 
-            {forgotPasswordSuccess && isLogin && (
-              <div className="bg-emerald-50 dark:bg-emerald-900/20 border border-emerald-200 dark:border-emerald-800 rounded-2xl p-6 space-y-3">
-                <div className="flex items-center gap-2 text-emerald-700 dark:text-emerald-300">
-                  <Mail className="h-5 w-5" />
-                  <h3 className="font-semibold">Check Your Email! 📧</h3>
-                </div>
-                <div className="text-emerald-600 dark:text-emerald-400 space-y-2">
-                  <p>We've sent a password reset link to your email. Click the link to create a new password.</p>
-                  <p className="text-sm">The link will expire in 1 hour for security.</p>
-                </div>
-              </div>
-            )}
-
             <p className="text-center font-funnelSans text-lg md:text-lg text-muted-foreground">
               {isLogin ? "Don't have an account?" : "Already have an account?"}{" "}
               <span
                 onClick={() => {
                   setIsLogin(!isLogin);
-                  setForgotPasswordSuccess(false); // Reset success message when switching
+                  clearError();
                 }}
                 className="cursor-pointer font-bold text-brand hover:underline"
               >

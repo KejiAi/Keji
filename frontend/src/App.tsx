@@ -3,13 +3,15 @@ import { Toaster as Sonner } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { BrowserRouter, Routes, Route } from "react-router-dom";
-import { SessionProvider } from "@/contexts/SessionContext";
+import { AuthProvider } from "@/contexts/AuthContext";
 import { SocketProvider } from "@/contexts/SocketContext";
 import ProtectedRoute from "./components/ProtectedRoute";
 import MobileOnlyWrapper from "./components/common/MobileOnlyWrapper";
 import Index from "./pages/Index";
 import Start from "./pages/Start";
+import AuthCallback from "./pages/AuthCallback";
 import EmailVerification from "./pages/EmailVerification";
+import ForgotPassword from "./pages/ForgotPassword";
 import ResetPassword from "./pages/ResetPassword";
 import Homepage from "./pages/Homepage";
 import Chat from "./pages/Chat";
@@ -25,13 +27,15 @@ const App = () => (
       <Toaster />
       <Sonner />
       <BrowserRouter>
-        <SessionProvider>
+        <AuthProvider>
           <SocketProvider>
             <MobileOnlyWrapper>
               <Routes>
                 <Route path="/" element={<Index />} />
                 <Route path="/start" element={<Start />} />
-                <Route path="/verify-email" element={<EmailVerification />} />
+                <Route path="/auth/callback" element={<AuthCallback />} />
+                <Route path="/email-verification" element={<EmailVerification />} />
+                <Route path="/forgot-password" element={<ForgotPassword />} />
                 <Route path="/reset-password" element={<ResetPassword />} />
                 <Route path="/homepage" element={<ProtectedRoute><Homepage /></ProtectedRoute>} />
                 <Route path="/chat" element={<ProtectedRoute><Chat /></ProtectedRoute>} />
@@ -42,7 +46,7 @@ const App = () => (
               </Routes>
             </MobileOnlyWrapper>
           </SocketProvider>
-        </SessionProvider>
+        </AuthProvider>
       </BrowserRouter>
     </TooltipProvider>
   </QueryClientProvider>

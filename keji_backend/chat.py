@@ -1,7 +1,7 @@
-from flask import Blueprint, request, jsonify, Response, stream_with_context
-from flask_login import login_required, current_user
+from flask import Blueprint, request, jsonify, Response, stream_with_context, g
+from functools import wraps
 from extensions import db
-from models import Conversation, Message
+from models import Conversation, Message, User
 import os
 import logging
 import time
@@ -22,6 +22,67 @@ logger = logging.getLogger(__name__)
 chat_bp = Blueprint("chat", __name__)
 UPLOAD_FOLDER = "uploads"
 os.makedirs(UPLOAD_FOLDER, exist_ok=True)
+
+
+def get_user_from_request():
+    """
+    Get or create user from request headers.
+    Frontend sends user info from Supabase session.
+    
+    Headers expected:
+    - X-User-Id: Supabase user ID
+    - X-User-Email: User's email
+    - X-User-Name: User's display name (optional)
+    """
+    user_id = request.headers.get('X-User-Id')
+    email = request.headers.get('X-User-Email')
+    name = request.headers.get('X-User-Name')
+    
+    if not user_id or not email:
+        return None
+    
+    try:
+        # Find or create user
+        user = User.query.filter_by(supabase_id=user_id).first()
+        
+        if not user:
+            user = User.query.filter_by(email=email).first()
+            if user and not user.supabase_id:
+                user.supabase_id = user_id
+                if name:
+                    user.name = name
+                db.session.commit()
+        
+        if not user:
+            user = User(
+                supabase_id=user_id,
+                email=email,
+                name=name or email.split('@')[0],
+                chat_style='pure_english',
+                is_verified=True
+            )
+            db.session.add(user)
+            db.session.commit()
+            logger.info(f"Created new user: {email}")
+        
+        return user
+        
+    except Exception as e:
+        logger.error(f"Error getting user: {str(e)}")
+        db.session.rollback()
+        return None
+
+
+def auth_required(f):
+    """Simple decorator to require user info in request headers."""
+    @wraps(f)
+    def decorated(*args, **kwargs):
+        user = get_user_from_request()
+        if not user:
+            return jsonify({"error": "User info required"}), 401
+        g.current_user = user
+        return f(*args, **kwargs)
+    return decorated
 
 def get_time_of_day():
     """
@@ -227,8 +288,11 @@ def call_llm(messages, user_name=None, conversation_history=None, time_of_day=No
 
 
 @chat_bp.route("/chat", methods=["POST"])
-@login_required
+@auth_required
 def chat():
+    # Get user from request (set by auth_required decorator)
+    user = g.current_user
+    
     # Check if streaming is requested
     stream_response = request.args.get('stream', 'false').lower() == 'true'
     
@@ -247,17 +311,17 @@ def chat():
         if files and len(files) > MAX_ATTACHMENTS:
             return jsonify({"error": f"You can upload at most {MAX_ATTACHMENTS} files per message."}), 400
         
-        logger.info(f"HTTP chat request from {current_user.name}: {len(user_message)} chars (stream={stream_response})")
+        logger.info(f"HTTP chat request from {user.name}: {len(user_message)} chars (stream={stream_response})")
     except Exception as e:
         logger.error(f"Error validating chat request: {str(e)}", exc_info=True)
         return jsonify({"error": "Invalid request"}), 400
 
     try:
         # 1. Find or create latest conversation
-        conversation = Conversation.query.filter_by(user_id=current_user.id)\
+        conversation = Conversation.query.filter_by(user_id=user.id)\
             .order_by(Conversation.id.desc()).first()
         if not conversation:
-            conversation = Conversation(user_id=current_user.id)
+            conversation = Conversation(user_id=user.id)
             db.session.add(conversation)
             db.session.commit()
             logger.info(f"Created new conversation (ID: {conversation.id})")
@@ -310,13 +374,13 @@ def chat():
         
         # 5. Determine context info
         send_time, send_name, time_of_day = should_send_context_info(history)
-        chat_style = getattr(current_user, "chat_style", "more_english") or "more_english"
+        chat_style = user.chat_style or "more_english"
         
         # 6. Call AI
         logger.info("Processing with AI...")
         bot_reply = call_llm(
             messages,
-            user_name=current_user.name if send_name else None,
+            user_name=user.name if send_name else None,
             conversation_history=filtered_history,
             time_of_day=time_of_day if send_time else None,
             chat_style=chat_style,
@@ -434,8 +498,10 @@ def chat():
         return jsonify({"type": "chat", "role": "assistant", "content": reply_text}), 200
 
 @chat_bp.route("/accept_recommendation", methods=["POST"])
-@login_required
+@auth_required
 def accept_recommendation():
+    user = g.current_user
+    
     try:
         data = request.get_json()
         
@@ -449,7 +515,7 @@ def accept_recommendation():
         if not title or not content:
             return jsonify({"status": "error", "message": "Missing title or content"}), 400
         
-        logger.info(f"Accepting recommendation: {title} (User: {current_user.name})")
+        logger.info(f"Accepting recommendation: {title} (User: {user.name})")
 
     except Exception as e:
         logger.error(f"Error validating recommendation data: {str(e)}", exc_info=True)
@@ -457,7 +523,7 @@ def accept_recommendation():
 
     try:
         # Find latest conversation
-        conversation = Conversation.query.filter_by(user_id=current_user.id)\
+        conversation = Conversation.query.filter_by(user_id=user.id)\
             .order_by(Conversation.id.desc()).first()
         
         if not conversation:
@@ -483,7 +549,7 @@ def accept_recommendation():
 
 
 @chat_bp.route("/reject_recommendation", methods=["POST"])
-@login_required
+@auth_required
 def reject_recommendation():
     """
     Handle when user rejects a recommendation (clicks 'No').
@@ -502,6 +568,8 @@ def reject_recommendation():
         }
     }
     """
+    user = g.current_user
+    
     try:
         data = request.get_json()
         
@@ -521,7 +589,7 @@ def reject_recommendation():
         ingredients = recommendation_context.get("ingredients")
         rejected_titles = recommendation_context.get("rejected_titles", [])
         
-        logger.info(f"Rejecting recommendation: {rejected_title} (User: {current_user.name})")
+        logger.info(f"Rejecting recommendation: {rejected_title} (User: {user.name})")
         logger.info(f"   Context type: {context_type}, budget: {budget}, ingredients: {ingredients}")
         logger.info(f"   Previously rejected: {rejected_titles}")
 
@@ -531,7 +599,7 @@ def reject_recommendation():
 
     try:
         # Find latest conversation for context
-        conversation = Conversation.query.filter_by(user_id=current_user.id)\
+        conversation = Conversation.query.filter_by(user_id=user.id)\
             .order_by(Conversation.id.desc()).first()
         
         if not conversation:
@@ -547,7 +615,7 @@ def reject_recommendation():
         )
         
         # Get chat style
-        chat_style = getattr(current_user, "chat_style", "more_english") or "more_english"
+        chat_style = user.chat_style or "more_english"
         
         # Call rejection handler (bypasses classification, directly gets new recommendation)
         # NOTE: We do NOT save the rejected recommendation to DB
@@ -578,18 +646,20 @@ def reject_recommendation():
 
 
 @chat_bp.route("/chat/history", methods=["GET"])
-@login_required
+@auth_required
 def history():
     """
     Retrieve full conversation history for frontend display.
     This ALWAYS returns the complete history, never filtered.
     The frontend needs all messages to display the full conversation.
     """
+    user = g.current_user
+    
     try:
-        logger.info(f"HTTP history request from {current_user.name}")
+        logger.info(f"HTTP history request from {user.name}")
         
         # Get latest conversation for this user
-        conversation = Conversation.query.filter_by(user_id=current_user.id)\
+        conversation = Conversation.query.filter_by(user_id=user.id)\
             .order_by(Conversation.id.desc()).first()
 
         if not conversation:

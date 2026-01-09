@@ -1,8 +1,7 @@
-from flask import request
-from flask_login import current_user
+from flask import request, g
 from flask_socketio import emit, join_room, leave_room, disconnect
 from extensions import socketio, db
-from models import Conversation, Message, MessageAttachment
+from models import Conversation, Message, MessageAttachment, User
 
 
 MAX_ATTACHMENTS = 2
@@ -54,6 +53,81 @@ os.environ.setdefault("REQUESTS_CA_BUNDLE", certifi.where())
 
 # Create logger for this module
 logger = logging.getLogger(__name__)
+
+# Dictionary to store user info per socket session (sid -> user_info)
+socket_users = {}
+
+
+def get_socket_user(sid=None):
+    """
+    Get the user info for the current socket session.
+    
+    Returns:
+        dict with user info (id, name, email, chat_style) or None if not connected
+    """
+    if sid is None:
+        sid = request.sid
+    return socket_users.get(sid)
+
+
+def set_socket_user(sid, user_info):
+    """Store user info for a socket session."""
+    socket_users[sid] = user_info
+
+
+def remove_socket_user(sid):
+    """Remove user info when socket disconnects."""
+    socket_users.pop(sid, None)
+
+
+def get_or_create_user(user_id: str, email: str, name: str, chat_style: str = None) -> User | None:
+    """
+    Get or create a database user record.
+    Frontend sends user info from Supabase session.
+    
+    Args:
+        user_id: Supabase user ID (UUID)
+        email: User's email
+        name: User's display name
+        chat_style: User's chat style preference
+        
+    Returns:
+        User: Database user record, or None on error
+    """
+    try:
+        # Try to find by supabase_id first
+        user = User.query.filter_by(supabase_id=user_id).first()
+        
+        if not user:
+            # Try by email as fallback
+            user = User.query.filter_by(email=email).first()
+            if user and not user.supabase_id:
+                # Link existing user to Supabase ID
+                user.supabase_id = user_id
+                if name:
+                    user.name = name
+                db.session.commit()
+        
+        if not user:
+            # Create new user
+            user = User(
+                supabase_id=user_id,
+                email=email,
+                name=name or email.split('@')[0],
+                chat_style=chat_style or 'pure_english',
+                is_verified=True
+            )
+            db.session.add(user)
+            db.session.commit()
+            logger.info(f"Created new user: {email}")
+        
+        return user
+        
+    except Exception as e:
+        logger.error(f"Error getting/creating user: {str(e)}")
+        db.session.rollback()
+        return None
+
 
 # Check if we're in production mode
 ENVIRONMENT = os.getenv("FLASK_ENV", "development").strip().lower()
@@ -355,23 +429,55 @@ def call_llm(messages, user_name=None, conversation_history=None, time_of_day=No
 
 @socketio.on('connect')
 def handle_connect():
-    """Handle client connection"""
+    """
+    Handle client connection.
+    
+    Client passes user info from Supabase session as query parameters:
+    socket.connect({ query: { user_id, email, name, chat_style } })
+    
+    Frontend handles all authentication with Supabase.
+    Backend just needs user info to associate data.
+    """
     try:
-        if not current_user.is_authenticated:
-            logger.warning("Unauthorized WebSocket connection attempt")
+        # Get user info from query params (sent from frontend Supabase session)
+        user_id = request.args.get('user_id')
+        email = request.args.get('email')
+        name = request.args.get('name')
+        chat_style = request.args.get('chat_style', 'pure_english')
+        
+        if not user_id or not email:
+            logger.warning("WebSocket connection attempt without user info")
             return False  # Reject connection
         
-        logger.info(f"WebSocket connected: User {current_user.name} (ID: {current_user.id})")
+        # Get or create database user
+        db_user = get_or_create_user(user_id, email, name, chat_style)
+        
+        if not db_user:
+            logger.error("Failed to get/create database user")
+            return False
+        
+        # Store user info in socket session
+        user_info = {
+            'id': db_user.id,
+            'supabase_id': user_id,
+            'name': db_user.name,
+            'email': db_user.email,
+            'chat_style': db_user.chat_style,
+            'is_authenticated': True
+        }
+        set_socket_user(request.sid, user_info)
+        
+        logger.info(f"WebSocket connected: User {user_info['name']} (ID: {user_info['id']})")
         
         # Join a room specific to this user
-        user_room = f"user_{current_user.id}"
+        user_room = f"user_{user_info['id']}"
         join_room(user_room)
         
         # Send connection confirmation
         emit('connected', {
             'message': 'Connected to Keji AI',
-            'user_id': current_user.id,
-            'user_name': current_user.name
+            'user_id': user_info['id'],
+            'user_name': user_info['name']
         })
         
         return True
@@ -385,10 +491,12 @@ def handle_connect():
 def handle_disconnect():
     """Handle client disconnection"""
     try:
-        if current_user.is_authenticated:
-            logger.info(f"WebSocket disconnected: User {current_user.name} (ID: {current_user.id})")
-            user_room = f"user_{current_user.id}"
+        user_info = get_socket_user(request.sid)
+        if user_info:
+            logger.info(f"WebSocket disconnected: User {user_info['name']} (ID: {user_info['id']})")
+            user_room = f"user_{user_info['id']}"
             leave_room(user_room)
+            remove_socket_user(request.sid)
     except Exception as e:
         logger.error(f"Error in WebSocket disconnect: {str(e)}", exc_info=True)
 
@@ -406,7 +514,8 @@ def handle_send_message(data):
     """
     try:
         # Validate authentication
-        if not current_user.is_authenticated:
+        user_info = get_socket_user(request.sid)
+        if not user_info or not user_info.get('is_authenticated'):
             emit('error', {'message': 'Not authenticated'})
             return
         
@@ -477,7 +586,7 @@ def handle_send_message(data):
             emit('error', {'message': 'Message too long (max 5000 characters)'})
             return
         
-        logger.info(f"New message from {current_user.name}: {len(user_message)} chars")
+        logger.info(f"New message from {user_info['name']}: {len(user_message)} chars")
         user_message_for_context = user_message
         
     except Exception as e:
@@ -488,10 +597,10 @@ def handle_send_message(data):
     # Handle database operations
     try:
         # 1. Find or create latest conversation
-        conversation = Conversation.query.filter_by(user_id=current_user.id)\
+        conversation = Conversation.query.filter_by(user_id=user_info['id'])\
             .order_by(Conversation.id.desc()).first()
         if not conversation:
-            conversation = Conversation(user_id=current_user.id)
+            conversation = Conversation(user_id=user_info['id'])
             db.session.add(conversation)
             db.session.commit()
             logger.info(f"Created new conversation (ID: {conversation.id})")
@@ -685,13 +794,13 @@ def handle_send_message(data):
         
         # 5. Determine context info
         send_time, send_name, time_of_day = should_send_context_info(history)
-        chat_style = getattr(current_user, "chat_style", "more_english") or "more_english"
+        chat_style = user_info.get("chat_style", "more_english") or "more_english"
         
         # 6. Call AI
         logger.info("Processing with AI...")
         bot_reply = call_llm(
             messages,
-            user_name=current_user.name if send_name else None,
+            user_name=user_info['name'] if send_name else None,
             conversation_history=filtered_history,
             time_of_day=time_of_day if send_time else None,
             chat_style=chat_style,
@@ -965,7 +1074,8 @@ def handle_accept_recommendation(data):
     """
     try:
         # Validate authentication
-        if not current_user.is_authenticated:
+        user_info = get_socket_user(request.sid)
+        if not user_info or not user_info.get('is_authenticated'):
             emit('error', {'message': 'Not authenticated'})
             return
         
@@ -982,7 +1092,7 @@ def handle_accept_recommendation(data):
             emit('error', {'message': 'Missing title'})
             return
         
-        logger.info(f"Accepting recommendation: {title} (User: {current_user.name})")
+        logger.info(f"Accepting recommendation: {title} (User: {user_info['name']})")
 
     except Exception as e:
         logger.error(f"Error validating recommendation: {str(e)}", exc_info=True)
@@ -991,7 +1101,7 @@ def handle_accept_recommendation(data):
 
     try:
         # Find latest conversation
-        conversation = Conversation.query.filter_by(user_id=current_user.id)\
+        conversation = Conversation.query.filter_by(user_id=user_info['id'])\
             .order_by(Conversation.id.desc()).first()
         
         if not conversation:
@@ -1041,7 +1151,7 @@ def handle_accept_recommendation(data):
         filtered_history = process_conversation_context(conversation, user_message, db.session)[0]
         
         # Get user's chat style preference
-        chat_style = current_user.chat_style if hasattr(current_user, 'chat_style') else None
+        chat_style = user_info.get('chat_style')
         
         # Build messages for AI context
         messages = [{"role": "user", "content": user_message}]
@@ -1049,7 +1159,7 @@ def handle_accept_recommendation(data):
         # Call AI to generate a confirmation response
         bot_reply = call_llm(
             messages,
-            user_name=current_user.name,
+            user_name=user_info['name'],
             conversation_history=filtered_history,
             chat_style=chat_style,
         )
@@ -1090,11 +1200,12 @@ def handle_request_history():
     """Send chat history to client"""
     try:
         # Validate authentication
-        if not current_user.is_authenticated:
+        user_info = get_socket_user(request.sid)
+        if not user_info or not user_info.get('is_authenticated'):
             emit('error', {'message': 'Not authenticated'})
             return
         
-        logger.info(f"Chat history requested by {current_user.name} (ID: {current_user.id})")
+        logger.info(f"Chat history requested by {user_info['name']} (ID: {user_info['id']})")
         
     except Exception as e:
         logger.error(f"Error validating history request: {str(e)}", exc_info=True)
@@ -1103,7 +1214,7 @@ def handle_request_history():
     
     try:
         # Get latest conversation for this user
-        conversation = Conversation.query.filter_by(user_id=current_user.id)\
+        conversation = Conversation.query.filter_by(user_id=user_info['id'])\
             .order_by(Conversation.id.desc()).first()
 
         if not conversation:

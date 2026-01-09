@@ -6,8 +6,7 @@ import Logo from "@/components/branding/Logo";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
-import { getBackendUrl } from "@/lib/utils";
-import { useSession } from "@/contexts/SessionContext";
+import { useAuthContext } from "@/contexts/AuthContext";
 import { Input } from "@/components/ui/input";
 import { useToast } from "@/hooks/use-toast";
 import ChatStyleModal from "@/components/modals/ChatStyleModal";
@@ -20,7 +19,7 @@ interface UserData {
 }
 
 const Profile = () => {
-  const { user, logout, isLoading, updateUserName, updateChatStyle } = useSession();
+  const { user, logout, isLoading, updateUserName, updateChatStyle } = useAuthContext();
   const { toast } = useToast();
   const navigate = useNavigate();
   const [isEditingName, setIsEditingName] = useState(false);
@@ -78,19 +77,10 @@ const Profile = () => {
 
     setIsSavingName(true);
     try {
-      const response = await fetch(`${getBackendUrl()}/update-name`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        credentials: "include",
-        body: JSON.stringify({ name: trimmed }),
-      });
+      // Use Supabase to update the user's name
+      const success = await updateUserName(trimmed);
 
-      const data = await response.json();
-
-      if (response.ok) {
-        if (data.user?.name) {
-          updateUserName(data.user.name);
-        }
+      if (success) {
         toast({
           title: "Name updated",
           description: "Your profile name has been updated.",
@@ -99,7 +89,7 @@ const Profile = () => {
       } else {
         toast({
           title: "Update failed",
-          description: data.error || "Could not update your name. Please try again.",
+          description: "Could not update your name. Please try again.",
           variant: "destructive",
         });
       }

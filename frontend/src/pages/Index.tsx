@@ -6,11 +6,11 @@ import Logo from "@/components/branding/Logo";
 import { useLocation, Navigate } from "react-router-dom";
 import { useEffect, useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { useSession } from "@/contexts/SessionContext";
+import { useAuthContext } from "@/contexts/AuthContext";
 
 const Index = () => {
   const location = useLocation();
-  const { isAuthenticated, isLoading } = useSession();
+  const { isAuthenticated, isLoading } = useAuthContext();
   const [showRedirectMessage, setShowRedirectMessage] = useState(false);
 
   useEffect(() => {

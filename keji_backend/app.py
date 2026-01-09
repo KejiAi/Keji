@@ -1,5 +1,4 @@
 from flask import Flask, jsonify, request
-from flask_login import login_required, current_user
 from flask_cors import CORS
 from dotenv import load_dotenv
 import os
@@ -9,7 +8,7 @@ import logging
 load_dotenv()
 
 # Import extensions
-from extensions import db, migrate, login_manager, socketio
+from extensions import db, migrate, socketio
 
 app = Flask(__name__)
 
@@ -85,8 +84,7 @@ app.config["REMEMBER_COOKIE_PATH"] = "/"
 # Initialize extensions with app
 db.init_app(app)
 migrate.init_app(app, db)
-login_manager.init_app(app)
-login_manager.login_view = "login"
+# Note: Flask-Login removed - auth is now handled by Supabase on frontend
 # Initialize SocketIO with app and configuration
 socketio.init_app(
     app, 
@@ -107,11 +105,8 @@ logger = setup_logging(app)
 logger.info("Flask application starting up...")
 
 from models import User
-from auth import auth_bp, oauth
+from auth import auth_bp
 app.register_blueprint(auth_bp)
-
-# Initialize OAuth with app
-oauth.init_app(app)
 
 from chat import chat_bp
 app.register_blueprint(chat_bp)
@@ -122,13 +117,6 @@ import websocket
 # Initialize background scheduler with app context
 from auth import init_scheduler
 init_scheduler(app)
-
-@login_manager.user_loader
-def load_user(user_id):
-    user = User.query.get(int(user_id))
-    if not user:
-        logger.warning(f"User not found with ID: {user_id}")
-    return user
 
 # Request/Response logging middleware
 @app.before_request

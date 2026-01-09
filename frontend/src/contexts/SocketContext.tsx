@@ -2,7 +2,7 @@ import React, { createContext, useContext, useEffect, useState, useCallback, use
 import { io, Socket } from 'socket.io-client';
 import type { ManagerOptions, SocketOptions } from 'socket.io-client';
 import { getBackendUrl } from '@/lib/utils';
-import { useSession } from '@/contexts/SessionContext';
+import { useAuthContext } from '@/contexts/AuthContext';
 
 // Type definitions for WebSocket messages
 interface SocketMessage {
@@ -114,7 +114,7 @@ export const SocketProvider: React.FC<SocketProviderProps> = ({ children }) => {
   const [isReconnecting, setIsReconnecting] = useState(false);
   const [connectionAttempts, setConnectionAttempts] = useState(0);
   const [hasSyncedHistory, setHasSyncedHistory] = useState(false);
-  const { isAuthenticated, isLoading: sessionLoading } = useSession();
+  const { user, isAuthenticated, isLoading: sessionLoading } = useAuthContext();
   const socketRef = useRef<Socket | null>(null);
   const eventHandlersRef = useRef<{
     onReceiveMessage: Set<(data: SocketMessage) => void>;
@@ -161,175 +161,193 @@ export const SocketProvider: React.FC<SocketProviderProps> = ({ children }) => {
     }
 
     // Initialize socket connection once session is ready and authenticated
-    const backendUrl = getBackendUrl();
-    console.log('🔌 Initializing WebSocket connection to:', backendUrl);
-
-    type ExtendedSocketOptions = Partial<ManagerOptions & SocketOptions> & {
-      pingTimeout?: number;
-      pingInterval?: number;
-    };
-
-    const socketOptions: ExtendedSocketOptions = {
-      withCredentials: true,
-      transports: ['websocket', 'polling'],
-      reconnection: true,
-      reconnectionAttempts: Infinity, // Retry forever until connected
-      reconnectionDelay: 1000, // Start with 1 second
-      reconnectionDelayMax: 5000, // Max 5 seconds between retries
-      randomizationFactor: 0.5, // Add randomness to prevent thundering herd
-      timeout: 120000, // 2 minutes timeout for initial connection
-      // Keep connection alive with aggressive ping/pong
-      pingTimeout: 60000, // 60 seconds - wait 60s for pong response
-      pingInterval: 25000, // 25 seconds - send ping every 25s
-    };
-
-    const newSocket = io(backendUrl, socketOptions);
-
-    socketRef.current = newSocket;
-    // Connection event handlers
-    newSocket.on('connect', () => {
-      console.log('✅ WebSocket connected');
-      setIsConnected(true);
-      setIsReconnecting(false);
-      setConnectionAttempts(0);
-      setHasSyncedHistory(false);
-    });
-
-    newSocket.on('connected', (data) => {
-      console.log('✅ WebSocket connection confirmed:', data);
-      setIsConnected(true);
-      setIsReconnecting(false);
-      setConnectionAttempts(0);
-      setHasSyncedHistory(false);
-    });
-
-    newSocket.on('disconnect', (reason) => {
-      console.log('❌ WebSocket disconnected:', reason);
-      setIsConnected(false);
-      setHasSyncedHistory(false);
-      
-      // Only show reconnecting if it's an unexpected disconnect
-      if (reason === 'io server disconnect') {
-        // Server disconnected (e.g., auth failure) - don't auto-reconnect
-        setIsReconnecting(false);
-      } else {
-        // Client-side disconnect or network issues - will auto-reconnect
-        setIsReconnecting(true);
+    const initSocket = () => {
+      if (!user) {
+        console.error('❌ No user data available for WebSocket connection');
+        return;
       }
-    });
 
-    newSocket.on('reconnect_attempt', (attemptNumber) => {
-      console.log(`🔄 Reconnection attempt ${attemptNumber}...`);
-      setIsReconnecting(true);
-      setConnectionAttempts(attemptNumber);
-    });
+      const backendUrl = getBackendUrl();
+      console.log('🔌 Initializing WebSocket connection to:', backendUrl);
 
-    newSocket.on('reconnect', (attemptNumber) => {
-      console.log(`✅ Reconnected after ${attemptNumber} attempts`);
-      setIsConnected(true);
-      setIsReconnecting(false);
-      setConnectionAttempts(0);
-    });
+      type ExtendedSocketOptions = Partial<ManagerOptions & SocketOptions> & {
+        pingTimeout?: number;
+        pingInterval?: number;
+      };
 
-    newSocket.on('reconnect_error', (error) => {
-      console.error('❌ Reconnection error:', error);
-      setIsReconnecting(true);
-    });
+      const socketOptions: ExtendedSocketOptions = {
+        withCredentials: true,
+        transports: ['websocket', 'polling'],
+        reconnection: true,
+        reconnectionAttempts: Infinity, // Retry forever until connected
+        reconnectionDelay: 1000, // Start with 1 second
+        reconnectionDelayMax: 5000, // Max 5 seconds between retries
+        randomizationFactor: 0.5, // Add randomness to prevent thundering herd
+        timeout: 120000, // 2 minutes timeout for initial connection
+        // Keep connection alive with aggressive ping/pong
+        pingTimeout: 60000, // 60 seconds - wait 60s for pong response
+        pingInterval: 25000, // 25 seconds - send ping every 25s
+        // Pass user info from Supabase session
+        query: {
+          user_id: user.id,
+          email: user.email,
+          name: user.name,
+          chat_style: user.chat_style,
+        },
+      };
 
-    newSocket.on('reconnect_failed', () => {
-      console.error('❌ Reconnection failed - will keep trying...');
-      setIsReconnecting(true);
-    });
+      const newSocket = io(backendUrl, socketOptions);
 
-    newSocket.on('connect_error', (error) => {
-      console.error('❌ WebSocket connection error:', error);
-      setIsConnected(false);
-      setIsReconnecting(true);
-    });
+      socketRef.current = newSocket;
+      
+      // Connection event handlers
+      newSocket.on('connect', () => {
+        console.log('✅ WebSocket connected');
+        setIsConnected(true);
+        setIsReconnecting(false);
+        setConnectionAttempts(0);
+        setHasSyncedHistory(false);
+      });
 
-    // Message event handlers
-    newSocket.on('receive_message', (data) => {
-      console.log('📨 Received message:', data);
-      eventHandlersRef.current.onReceiveMessage.forEach(handler => {
-        try {
-          handler(data);
-        } catch (error) {
-          console.error('Error in receive_message handler:', error);
+      newSocket.on('connected', (data) => {
+        console.log('✅ WebSocket connection confirmed:', data);
+        setIsConnected(true);
+        setIsReconnecting(false);
+        setConnectionAttempts(0);
+        setHasSyncedHistory(false);
+      });
+
+      newSocket.on('disconnect', (reason) => {
+        console.log('❌ WebSocket disconnected:', reason);
+        setIsConnected(false);
+        setHasSyncedHistory(false);
+        
+        // Only show reconnecting if it's an unexpected disconnect
+        if (reason === 'io server disconnect') {
+          // Server disconnected (e.g., auth failure) - don't auto-reconnect
+          setIsReconnecting(false);
+        } else {
+          // Client-side disconnect or network issues - will auto-reconnect
+          setIsReconnecting(true);
         }
       });
-    });
 
-    newSocket.on('receive_chunk', (data) => {
-      console.log('📦 Received chunk:', data.chunk_index + 1, '/', data.total_chunks);
-      eventHandlersRef.current.onReceiveChunk.forEach(handler => {
-        try {
-          handler(data);
-        } catch (error) {
-          console.error('Error in receive_chunk handler:', error);
-        }
+      newSocket.on('reconnect_attempt', (attemptNumber) => {
+        console.log(`🔄 Reconnection attempt ${attemptNumber}...`);
+        setIsReconnecting(true);
+        setConnectionAttempts(attemptNumber);
       });
-    });
 
-    newSocket.on('receive_recommendation', (data) => {
-      console.log('📌 Received recommendation:', data);
-      eventHandlersRef.current.onReceiveRecommendation.forEach(handler => {
-        try {
-          handler(data);
-        } catch (error) {
-          console.error('Error in receive_recommendation handler:', error);
-        }
+      newSocket.on('reconnect', (attemptNumber) => {
+        console.log(`✅ Reconnected after ${attemptNumber} attempts`);
+        setIsConnected(true);
+        setIsReconnecting(false);
+        setConnectionAttempts(0);
       });
-    });
 
-    newSocket.on('chat_history', (data) => {
-      console.log('📖 Received chat history:', data);
-      setHasSyncedHistory(true);
-      eventHandlersRef.current.onChatHistory.forEach(handler => {
-        try {
-          handler(data);
-        } catch (error) {
-          console.error('Error in chat_history handler:', error);
-        }
+      newSocket.on('reconnect_error', (error) => {
+        console.error('❌ Reconnection error:', error);
+        setIsReconnecting(true);
       });
-    });
 
-    newSocket.on('error', (data) => {
-      console.error('⚠️ WebSocket error:', data);
-      eventHandlersRef.current.onError.forEach(handler => {
-        try {
-          handler(data);
-        } catch (error) {
-          console.error('Error in error handler:', error);
-        }
+      newSocket.on('reconnect_failed', () => {
+        console.error('❌ Reconnection failed - will keep trying...');
+        setIsReconnecting(true);
       });
-    });
 
-    newSocket.on('message_saved', (data) => {
-      console.log('✅ Message saved:', data);
-      eventHandlersRef.current.onMessageSaved.forEach(handler => {
-        try {
-          handler(data);
-        } catch (error) {
-          console.error('Error in message_saved handler:', error);
-        }
+      newSocket.on('connect_error', (error) => {
+        console.error('❌ WebSocket connection error:', error);
+        setIsConnected(false);
+        setIsReconnecting(true);
       });
-    });
 
-    newSocket.on('recommendation_saved', (data) => {
-      console.log('✅ Recommendation saved:', data);
-    });
+      // Message event handlers
+      newSocket.on('receive_message', (data) => {
+        console.log('📨 Received message:', data);
+        eventHandlersRef.current.onReceiveMessage.forEach(handler => {
+          try {
+            handler(data);
+          } catch (error) {
+            console.error('Error in receive_message handler:', error);
+          }
+        });
+      });
 
-    setSocket(newSocket);
+      newSocket.on('receive_chunk', (data) => {
+        console.log('📦 Received chunk:', data.chunk_index + 1, '/', data.total_chunks);
+        eventHandlersRef.current.onReceiveChunk.forEach(handler => {
+          try {
+            handler(data);
+          } catch (error) {
+            console.error('Error in receive_chunk handler:', error);
+          }
+        });
+      });
+
+      newSocket.on('receive_recommendation', (data) => {
+        console.log('📌 Received recommendation:', data);
+        eventHandlersRef.current.onReceiveRecommendation.forEach(handler => {
+          try {
+            handler(data);
+          } catch (error) {
+            console.error('Error in receive_recommendation handler:', error);
+          }
+        });
+      });
+
+      newSocket.on('chat_history', (data) => {
+        console.log('📖 Received chat history:', data);
+        setHasSyncedHistory(true);
+        eventHandlersRef.current.onChatHistory.forEach(handler => {
+          try {
+            handler(data);
+          } catch (error) {
+            console.error('Error in chat_history handler:', error);
+          }
+        });
+      });
+
+      newSocket.on('error', (data) => {
+        console.error('⚠️ WebSocket error:', data);
+        eventHandlersRef.current.onError.forEach(handler => {
+          try {
+            handler(data);
+          } catch (error) {
+            console.error('Error in error handler:', error);
+          }
+        });
+      });
+
+      newSocket.on('message_saved', (data) => {
+        console.log('✅ Message saved:', data);
+        eventHandlersRef.current.onMessageSaved.forEach(handler => {
+          try {
+            handler(data);
+          } catch (error) {
+            console.error('Error in message_saved handler:', error);
+          }
+        });
+      });
+
+      newSocket.on('recommendation_saved', (data) => {
+        console.log('✅ Recommendation saved:', data);
+      });
+
+      setSocket(newSocket);
+    };
+
+    // Call the async init function
+    initSocket();
 
     // Cleanup on unmount
     return () => {
       console.log('🔌 Closing WebSocket connection');
-      newSocket.close();
-      if (socketRef.current === newSocket) {
+      if (socketRef.current) {
+        socketRef.current.close();
         socketRef.current = null;
       }
     };
-  }, [isAuthenticated, sessionLoading]);
+  }, [user, isAuthenticated, sessionLoading]);
 
   const sendMessage = useCallback((message: string, files?: OutgoingFile[], clientMessageId?: string) => {
     if (!socket || !isConnected) {

@@ -5,7 +5,7 @@ import SEO from "@/components/common/SEO";
 import { Button } from "@/components/ui/button";
 import { useToast } from "@/hooks/use-toast";
 import { getBackendUrl } from "@/lib/utils";
-import { useSession } from "@/contexts/SessionContext";
+import { useAuthContext } from "@/contexts/AuthContext";
 import { useSocket } from "@/contexts/SocketContext";
 import type { OutgoingFile } from "@/contexts/SocketContext";
 import type { SocketHistoryMessage } from "@/contexts/SocketContext";
@@ -108,7 +108,7 @@ interface Recommendation {
 const Chat = () => {
   const navigate = useNavigate();
   const location = useLocation();
-  const { user, isLoading: sessionLoading } = useSession();
+  const { user, isLoading: sessionLoading } = useAuthContext();
   const { toast } = useToast();
   const { 
     isConnected,

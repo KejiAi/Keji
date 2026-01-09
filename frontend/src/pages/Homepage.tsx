@@ -9,10 +9,7 @@ import { useNavigate } from "react-router-dom";
 import { motion, AnimatePresence } from "framer-motion";
 import BudgetModal from "@/components/modals/BudgetModal";
 import IngredientModal from "@/components/modals/IngredientModal";
-import { useSession } from "@/contexts/SessionContext";
-
-const frontendUrl = import.meta.env.VITE_FRONTEND_BASE_URL;
-
+import { useAuthContext } from "@/contexts/AuthContext";
 
 const Homepage = () => {
   const navigate = useNavigate();
@@ -22,7 +19,7 @@ const Homepage = () => {
   const [ingredientModalOpen, setIngredientModalOpen] = useState(false);
   const [selectedFiles, setSelectedFiles] = useState<File[]>([]);
   const [isLoggingOut, setIsLoggingOut] = useState(false);
-  const { user, isLoading, logout } = useSession();
+  const { user, isLoading, logout, greeting } = useAuthContext();
 
   const menuRef = useRef<HTMLDivElement | null>(null);
 
@@ -166,26 +163,26 @@ const Homepage = () => {
         <div className="mb-10 md:mb-12 mt-12">
           <h2 className="font-funnelDisplay leading-none text-left">
             <span className="inline-flex items-center gap-2 flex-wrap">
-              {user.greet ? (
-                <span className="text-primary text-2xl md:text-4xl font-bold">{user.greet}</span>
-              ) : user.time ? (
+              {greeting.type === 'night' && greeting.message ? (
                 <>
-                  <span className="text-gray-400 text-xl md:text-2xl font-normal">Good {user.time}</span>{" "}
+                  <span className="text-primary text-2xl md:text-4xl font-bold">{greeting.message}</span>
+                </>
+              ) : (
+                <>
+                  <span className="text-gray-400 text-xl md:text-2xl font-normal">Good {greeting.type}</span>{" "}
                   <img 
                     src={
-                      user.time === "morning" 
+                      greeting.type === "morning" 
                         ? "assets/All Icon Used/vaadin_morning.svg"
-                        : user.time === "afternoon"
+                        : greeting.type === "afternoon"
                         ? "assets/All Icon Used/mingcute_sun-fill.svg"
                         : "assets/All Icon Used/material-symbols-light_clear-night.svg"
                     }
-                    alt={user.time}
+                    alt={greeting.type}
                     className="h-6 w-6 md:h-8 md:w-8 inline"
                   />{" "}
                   <span className="text-primary text-3xl md:text-4xl font-extrabold">{user.fname},</span>
                 </>
-              ) : (
-                <span className="text-primary text-3xl md:text-4xl font-bold">Hi {user.fname},</span>
               )}
             </span>
             <br />

@@ -165,7 +165,7 @@ const Feedback = () => {
                   maxLength={500}
                 />
                 {/* Mic Button */}
-                <Button
+                {/* <Button
                   variant="ghost"
                   size="icon"
                   onClick={handleMicClick}
@@ -179,7 +179,7 @@ const Feedback = () => {
                     className="h-6 w-6 object-contain"
                   />
                   <span className="sr-only">Voice input</span>
-                </Button>
+                </Button> */}
               </div>
               <p className="text-right text-xs text-muted-foreground mt-2 font-geist">
                 {comment.length}/500

@@ -106,7 +106,9 @@ export function toAppUser(user: SupabaseUser | null): AppUser | null {
   if (!user) return null;
 
   const metadata = user.user_metadata as UserMetadata;
-  const name = metadata?.name || user.email?.split('@')[0] || 'User';
+  // Prioritize our custom 'display_name' (Google can't overwrite this)
+  // Fall back to Google's full_name, then name, then email prefix
+  const name = metadata?.display_name || metadata?.full_name || metadata?.name || user.email?.split('@')[0] || 'User';
   const fname = name.split(' ')[0];
   const initial = fname.charAt(0).toUpperCase();
 
@@ -116,8 +118,8 @@ export function toAppUser(user: SupabaseUser | null): AppUser | null {
     name,
     fname,
     initial,
-    chat_style: (metadata?.chat_style as AppUser['chat_style']) || 'pure_english',
-    avatar_url: metadata?.avatar_url,
+    chat_style: (metadata?.chat_style as AppUser['chat_style']) || 'more_english',
+    avatar_url: metadata?.avatar_url || metadata?.picture, // Google uses 'picture' for avatar
     created_at: user.created_at,
   };
 }
@@ -136,8 +138,9 @@ export async function signUp(data: SignUpData): Promise<AuthResult<{ user: AppUs
       password: data.password,
       options: {
         data: {
-          name: data.name,
-          chat_style: 'pure_english',
+          display_name: data.name,  // Use display_name so Google OAuth won't overwrite it
+          name: data.name,          // Also set name for Supabase email templates ({{ .Data.name }})
+          chat_style: 'more_english',
         },
         // Use current origin so email links work for both localhost and production
         emailRedirectTo: `${window.location.origin}/auth/callback`,
@@ -353,7 +356,7 @@ export async function verifyPasswordResetCode(email: string, code: string): Prom
 export async function updateUserName(name: string): Promise<AuthResult<{ user: AppUser | null }>> {
   const result = await withErrorHandling(async () => {
     const response = await supabase.auth.updateUser({
-      data: { name },
+      data: { display_name: name },  // Use display_name so Google OAuth won't overwrite it
     });
 
     return {

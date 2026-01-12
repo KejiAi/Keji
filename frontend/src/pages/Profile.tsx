@@ -261,9 +261,12 @@ const Profile = () => {
         isOpen={isChatStyleModalOpen}
         onClose={() => setIsChatStyleModalOpen(false)}
         currentStyle={chatStyle}
-        onStyleUpdate={(style) => {
-          setChatStyle(style);
-          updateChatStyle(style);
+        onStyleUpdate={async (style) => {
+          const success = await updateChatStyle(style);
+          if (success) {
+            setChatStyle(style);
+          }
+          return success;
         }}
       />
     </PageContainer>

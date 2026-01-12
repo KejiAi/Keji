@@ -8,14 +8,13 @@ import {
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { Label } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
-import { getBackendUrl } from "@/lib/utils";
 import { useToast } from "@/hooks/use-toast";
 
 interface ChatStyleModalProps {
   isOpen: boolean;
   onClose: () => void;
   currentStyle?: string;
-  onStyleUpdate: (style: string) => void;
+  onStyleUpdate: (style: string) => Promise<boolean>;
 }
 
 const chatStyles = [
@@ -36,21 +35,17 @@ const ChatStyleModal = ({ isOpen, onClose, currentStyle = "pure_english", onStyl
   }, [currentStyle, isOpen]);
 
   const handleSave = async () => {
+    if (selectedStyle === currentStyle) {
+      onClose();
+      return;
+    }
+
     setIsSaving(true);
     try {
-      const response = await fetch(`${getBackendUrl()}/update-chat-style`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        credentials: "include",
-        body: JSON.stringify({ chat_style: selectedStyle }),
-      });
+      // Use Supabase via the onStyleUpdate callback
+      const success = await onStyleUpdate(selectedStyle);
 
-      const data = await response.json();
-
-      if (response.ok) {
-        const updatedStyle = data.user?.chat_style || selectedStyle;
-        setSelectedStyle(updatedStyle);
-        onStyleUpdate(updatedStyle);
+      if (success) {
         toast({
           title: "Chat style updated",
           description: "Your chat style preference has been saved.",
@@ -59,7 +54,7 @@ const ChatStyleModal = ({ isOpen, onClose, currentStyle = "pure_english", onStyl
       } else {
         toast({
           title: "Update failed",
-          description: data.error || "Could not update chat style. Please try again.",
+          description: "Could not update chat style. Please try again.",
           variant: "destructive",
         });
       }

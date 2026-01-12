@@ -13,7 +13,7 @@ export interface AppUser {
   name: string;
   fname: string; // First name
   initial: string; // First letter of name
-  chat_style: 'pure_english' | 'pidgin' | 'yoruba' | 'igbo' | 'hausa';
+  chat_style: 'pure_english' | 'more_english' | 'pure_pidgin' | 'pidgin' | 'yoruba' | 'igbo' | 'hausa';
   avatar_url?: string;
   created_at?: string;
 }
@@ -55,9 +55,15 @@ export interface AuthResult<T = void> {
 
 // User metadata stored in Supabase
 export interface UserMetadata {
-  name?: string;
+  // Our custom fields (won't be overwritten by OAuth providers)
+  display_name?: string;  // User's chosen name - use this instead of 'name'
   chat_style?: string;
+  
+  // Fields that OAuth providers may set/overwrite
+  name?: string;          // Google overwrites this with their profile name
+  full_name?: string;     // Google's full name
   avatar_url?: string;
+  picture?: string;       // Google's avatar
 }
 
 // Re-export Supabase types for convenience

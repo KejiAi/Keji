@@ -42,8 +42,46 @@ export default function AuthCallback() {
         }
 
         if (session) {
+          const user = session.user;
+          const userMetadata = user.user_metadata || {};
+          
+          // Check if we need to set defaults for OAuth users (Google sign-in)
+          // Use display_name (Google can't overwrite this field)
+          const needsChatStyle = !userMetadata.chat_style;
+          const needsDisplayName = !userMetadata.display_name;
+          
+          if (needsChatStyle || needsDisplayName) {
+            const updateData: Record<string, string> = {};
+            
+            // Set default chat_style if missing
+            if (needsChatStyle) {
+              updateData.chat_style = 'more_english';
+            }
+            
+            // Set display_name from Google's name only if user doesn't have one
+            // (Manual signup users will already have display_name set)
+            if (needsDisplayName && (userMetadata.full_name || userMetadata.name)) {
+              updateData.display_name = userMetadata.full_name || userMetadata.name;
+            }
+            
+            if (Object.keys(updateData).length > 0) {
+              await supabase.auth.updateUser({ data: updateData });
+              
+              // Refresh session to get updated metadata
+              const { data: { session: updatedSession } } = await supabase.auth.getSession();
+              if (updatedSession) {
+                const appUser = toAppUser(updatedSession.user);
+                if (appUser) {
+                  login(appUser, updatedSession);
+                }
+                navigate('/homepage', { replace: true });
+                return;
+              }
+            }
+          }
+          
           // Convert to app user and update context
-          const appUser = toAppUser(session.user);
+          const appUser = toAppUser(user);
           if (appUser) {
             login(appUser, session);
           }

@@ -9,7 +9,7 @@ python-dotenv
 psycopg2-binary
 werkzeug
 apscheduler
-gunicorn
+gunicorn<25  # Gunicorn 25 removed the built-in Eventlet worker
 openai
 tiktoken
 resend

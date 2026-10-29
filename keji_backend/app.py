@@ -1,8 +1,6 @@
 from flask import Flask, jsonify, request
 from flask_cors import CORS
 from dotenv import load_dotenv
-from sqlalchemy import text
-from sqlalchemy.exc import SQLAlchemyError
 import os
 import logging
 
@@ -185,31 +183,6 @@ def test_openai():
             'status': 'error',
             'message': str(e)
         }), 500
-
-# Health check endpoint for Render and monitoring
-@app.route('/health')
-def health_check():
-    """Check that the backend and its database are reachable."""
-    from datetime import datetime
-
-    try:
-        db.session.execute(text("SELECT 1"))
-    except SQLAlchemyError:
-        db.session.rollback()
-        logger.exception("Health check database query failed")
-        return jsonify({
-            'status': 'unhealthy',
-            'service': 'keji-backend',
-            'database': 'unavailable'
-        }), 503
-
-    return jsonify({
-        'status': 'healthy',
-        'service': 'keji-backend',
-        'database': 'connected',
-        'timestamp': datetime.now().isoformat()
-    }), 200
-
 
 if __name__ == "__main__":
     # NOTE: Don't run this directly! Use run_dev.py instead.

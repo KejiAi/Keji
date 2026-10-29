@@ -9,11 +9,14 @@ Note: Authentication is now fully handled by Supabase on the frontend.
 User data (name, email, initials, greeting) comes from Supabase user metadata.
 """
 
+from datetime import datetime
+
 from flask import Blueprint
 from extensions import db
 import logging
 import os
 from dotenv import load_dotenv
+from sqlalchemy.exc import SQLAlchemyError
 
 load_dotenv()
 
@@ -76,5 +79,21 @@ def init_scheduler(app):
 
 @auth_bp.route("/health", methods=["GET"])
 def health_check():
-    """Simple health check endpoint for monitoring."""
-    return {"status": "ok", "service": "keji-backend"}, 200
+    """Check that the backend and its database are reachable."""
+    try:
+        db.session.execute(db.text("SELECT 1"))
+    except SQLAlchemyError:
+        db.session.rollback()
+        logger.exception("Health check database query failed")
+        return {
+            "status": "unhealthy",
+            "service": "keji-backend",
+            "database": "unavailable",
+        }, 503
+
+    return {
+        "status": "healthy",
+        "service": "keji-backend",
+        "database": "connected",
+        "timestamp": datetime.now().isoformat(),
+    }, 200

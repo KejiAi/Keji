@@ -236,6 +236,25 @@ def call_llm(...):
     return _openai_in_thread(_call)
 ```
 
+### 2b. Eventlet + Email (Resend) SSL Compatibility
+
+Solved email SSL recursion with subprocess isolation:
+
+```python
+def send_email(to_email, subject, html, text=None):
+    # Run in completely separate Python process (NO Eventlet)
+    result = subprocess.run(
+        ['python', 'send_email_helper.py', api_key, from_email, to_email, ...],
+        capture_output=True,
+        timeout=30
+    )
+    return result.returncode == 0
+```
+
+**Why different from OpenAI?** The `ssl` module is globally patched; even thread pools share it. Subprocess = fresh interpreter = clean SSL.
+
+> 📖 **For complete understanding of SSL/Eventlet conflicts and how to apply these patterns to new libraries (OAuth, payment APIs, etc.), see [EVENTLET_SSL_GUIDE.md](keji_backend/EVENTLET_SSL_GUIDE.md)**
+
 ### 3. Intelligent Context Management
 
 Automatic conversation summarization when token limit approached:
@@ -246,7 +265,23 @@ Automatic conversation summarization when token limit approached:
 - AI gets optimized context
 - **Result**: 60-70% token savings
 
-### 4. Production-Grade Error Handling
+### 4. Transactional Email + Database
+
+Email sent BEFORE user saved to database:
+
+```python
+# ✅ Send email first
+if not send_email(email, subject, html, text):
+    return error("Email failed")  # Don't create user
+
+# Email succeeded - now save user
+user = User(email=email, ...)
+db.session.commit()
+```
+
+**Why**: If email fails, user isn't stuck in database unable to verify.
+
+### 5. Production-Grade Error Handling
 
 Multi-layer error isolation with graceful degradation:
 
@@ -388,7 +423,8 @@ CHAT_RECENT_MESSAGES=10
 
 ### Health Checks
 
-- **Backend**: `GET /health` → `{"status": "healthy"}`
+- **Backend**: `GET /health` checks the backend and its PostgreSQL database; it returns `503` if the database is unreachable.
+- **Frontend**: Calls the backend health endpoint on startup and every five minutes while the app is open.
 - **Frontend**: `GET /` → Serves React app
 
 ## 🐛 Troubleshooting
@@ -429,7 +465,9 @@ For more troubleshooting, see:
 
 - **[Backend README](keji_backend/README.md)** - Setup, deployment, API
 - **[Architecture Guide](keji_backend/ARCHITECTURE.md)** - Technical deep dive
+- **[Eventlet SSL Guide](keji_backend/EVENTLET_SSL_GUIDE.md)** - ⚠️ **IMPORTANT**: Why SSL conflicts occur and how to fix them
 - **[WebSocket+OpenAI Guide](WEBSOCKET_OPENAI_GUIDE.md)** - Integration details
+- **[Email SSL Fix](keji_backend/EMAIL_SSL_FIX.md)** - Subprocess isolation solution
 
 ## 🎓 Learning Resources
 
@@ -485,4 +523,3 @@ Proprietary - Keji AI Contract Project
 ---
 
 **Built with ❤️ for Nigerian food lovers** 🍲🇳🇬
-

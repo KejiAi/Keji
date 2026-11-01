@@ -129,7 +129,6 @@ const ChatInputSection = ({
   return (
     <div className={containerClassName} style={{ borderTopLeftRadius: '40px', borderTopRightRadius: '40px' }}>
       <div className="w-full">
-        {/* File preview - DISABLED FOR NOW, uncomment when ready
         {selectedFiles.length > 0 && (
           <div className="px-2 mx-4 mt-3">
             <div className="flex flex-wrap gap-3">
@@ -158,7 +157,9 @@ const ChatInputSection = ({
                       <span className="text-xs truncate max-w-[64px] text-center">{file.name}</span>
                     </div>
                     <button
+                      type="button"
                       onClick={() => removeFile(index)}
+                      aria-label={`Remove ${file.name}`}
                       className="absolute -top-0 -right-0 bg-white text-black text-2xl rounded-full w-6 h-6 flex items-center justify-center hover:opacity-80 transition-opacity"
                     >
                       ×
@@ -169,9 +170,7 @@ const ChatInputSection = ({
             </div>
           </div>
         )}
-        */}
 
-        {/* Hidden file input - DISABLED FOR NOW, uncomment when ready
         <input
           ref={fileInputRef}
           type="file"
@@ -180,7 +179,6 @@ const ChatInputSection = ({
           className="hidden"
           onChange={handleFileChange}
         />
-        */}
         
         {/* Chat input */}
         <div 
@@ -216,11 +214,14 @@ const ChatInputSection = ({
 
         {/* Buttons container */}
         <div className="flex items-center px-4 pb-4 pt-1 justify-end mb-2">  {/* justify between later when not disabled but for now center */}
-          {/* Plus button (file upload) - DISABLED FOR NOW, uncomment when ready
-          <button onClick={handleFileSelect} className="flex-shrink-0 mb-1">
+          <button
+            type="button"
+            onClick={handleFileSelect}
+            aria-label="Add files"
+            className="flex-shrink-0 mb-1"
+          >
             <img src="assets/All Icon Used/ic_round-plus2.png" alt="Upload Button" className="h-10 w-10 object-contain" />
           </button>
-          */}
 
           <div className="flex items-center justify-center gap-[10px]">
             {/* Mic button - DISABLED FOR NOW, uncomment when ready
@@ -247,8 +248,7 @@ const ChatInputSection = ({
               size="icon"
               className="h-[44px] w-[44px] rounded-full bg-black flex-shrink-0 p-0"
               onClick={onSendMessage}
-              // disabled={isSendDisabled || (!message.trim() && selectedFiles.length === 0)} //disabled for now
-              disabled={isSendDisabled || !message.trim()}
+              disabled={isSendDisabled || (!message.trim() && selectedFiles.length === 0)}
             >
               <img
                 src="assets/All Icon Used/iconamoon_send-fill-HP.png"

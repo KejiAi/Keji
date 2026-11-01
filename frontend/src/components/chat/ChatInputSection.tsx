@@ -1,7 +1,7 @@
 import { useState, useRef, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
-// import InlineVoiceIndicator from "@/components/voice/InlineVoiceIndicator";
+import InlineVoiceIndicator from "@/components/voice/InlineVoiceIndicator";
 import { useToast } from "@/hooks/use-toast";
 
 interface ChatInputSectionProps {
@@ -192,15 +192,13 @@ const ChatInputSection = ({
             ref={textareaRef}
             value={message}
             onChange={(e) => onMessageChange(e.target.value)}
-            // placeholder={isVoiceRecording ? "Transcription will appear here..." : placeholder} //disabled for now
-            placeholder={placeholder}
+            placeholder={isVoiceRecording ? "Listening... Speak to add text" : placeholder}
             className="flex-1 bg-transparent text-base placeholder:text-muted-foreground/70 placeholder:text-base px-2 py-3 resize-none min-h-[48px]"
             onKeyDown={handleKeyDown}
             rows={1}
           />
         </div>
 
-        {/* Inline Voice Indicator - DISABLED FOR NOW, uncomment when ready
         {showVoiceInput && (
           <InlineVoiceIndicator
             isRecording={isVoiceRecording}
@@ -208,12 +206,14 @@ const ChatInputSection = ({
             onTranscription={(text) => {
               onMessageChange(message ? `${message} ${text}` : text);
             }}
+            onError={(description) => {
+              toast({ title: "Voice input unavailable", description });
+            }}
           />
         )}
-        */}
 
         {/* Buttons container */}
-        <div className="flex items-center px-4 pb-4 pt-1 justify-end mb-2">  {/* justify between later when not disabled but for now center */}
+        <div className="flex items-center px-4 pb-4 pt-1 justify-between mb-2">
           <button
             type="button"
             onClick={handleFileSelect}
@@ -224,12 +224,13 @@ const ChatInputSection = ({
           </button>
 
           <div className="flex items-center justify-center gap-[10px]">
-            {/* Mic button - DISABLED FOR NOW, uncomment when ready
             {showVoiceInput && (
               <Button
                 variant="ghost"
                 size="icon"
-                className={`p-0 hover:opacity-80 transition ${isVoiceRecording ? 'bg-budget-red/20 rounded-full' : ''}`}
+                aria-label={isVoiceRecording ? "Stop voice input" : "Start voice input"}
+                aria-pressed={isVoiceRecording}
+                className={`p-0 hover:opacity-80 transition ${isVoiceRecording ? "bg-budget-red/20 rounded-full" : ""}`}
                 onClick={() => setIsVoiceRecording(!isVoiceRecording)}
               >
                 <img
@@ -240,7 +241,6 @@ const ChatInputSection = ({
                 <span className="sr-only">{isVoiceRecording ? "Stop recording" : "Voice input"}</span>
               </Button>
             )}
-            */}
 
             {/* Send button */}
             <Button
